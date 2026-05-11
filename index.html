@@ -13,8 +13,8 @@ os.environ["ANTHROPIC_API_KEY"] = "YOUR_API_KEY_HERE"   # <-- replace this
 
 # ── 3. App code ──────────────────────────────────────────────
 import json
-import threading
 import urllib.request
+import urllib.error
 from flask import Flask, request, jsonify
 from flask_cloudflared import run_with_cloudflared
 
@@ -162,7 +162,7 @@ HTML = r"""<!DOCTYPE html>
     .club-tag { font-size: 0.72rem; padding: 3px 10px; border-radius: 100px; background: var(--tag-bg); color: var(--text-muted); font-weight: 500; }
     .club-link { display: inline-flex; align-items: center; gap: 5px; font-size: 0.82rem; font-weight: 600; color: var(--royal-mid); text-decoration: none; transition: color 0.15s; }
     .club-link:hover { color: var(--gold); }
-    #error { display: none; background: #FFF3F3; border: 1.5px solid #FFC0C0; border-radius: var(--radius); padding: 20px 24px; margin-top: 20px; color: #8B0000; font-size: 0.9rem; }
+    #error { display: none; background: #FFF3F3; border: 1.5px solid #FFC0C0; border-radius: var(--radius); padding: 20px 24px; margin-top: 20px; color: #8B0000; font-size: 0.9rem; line-height: 1.5; }
     footer { text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); margin-top: 40px; }
     footer a { color: var(--royal-mid); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
@@ -252,18 +252,37 @@ HTML = r"""<!DOCTYPE html>
   async function findClubs() {
     const interests = document.getElementById("interestInput").value.trim();
     const tags = [...selectedTags];
-    if (!interests && tags.length === 0) { showError("Please select some interest tags or describe your interests before searching."); return; }
+    if (!interests && tags.length === 0) {
+      showError("Please select some interest tags or describe your interests before searching.");
+      return;
+    }
     document.getElementById("error").style.display = "none";
     document.getElementById("findBtn").disabled = true;
     document.getElementById("loading").style.display = "block";
     document.getElementById("results").style.display = "none";
     try {
-      const resp = await fetch("/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ interests, tags }) });
-      const data = await resp.json();
-      if (!data.success) throw new Error(data.error || "Something went wrong.");
+      const resp = await fetch("/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interests, tags })
+      });
+      // Always parse as text first so we can give a clear error if it's not JSON
+      const text = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("Non-JSON response from server:", text);
+        showError("Server error — check that your Anthropic API key is set correctly in the Colab cell and try again.");
+        return;
+      }
+      if (!data.success) {
+        showError("Error from API: " + data.error);
+        return;
+      }
       renderResults(data.data);
     } catch (err) {
-      showError("We couldn't get recommendations right now. Please try again. (" + err.message + ")");
+      showError("Network error — make sure the Colab cell is still running. (" + err.message + ")");
     } finally {
       document.getElementById("loading").style.display = "none";
       document.getElementById("findBtn").disabled = false;
@@ -298,7 +317,11 @@ HTML = r"""<!DOCTYPE html>
     if (!str) return "";
     return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
-  function showError(msg) { const el = document.getElementById("error"); el.textContent = msg; el.style.display = "block"; }
+  function showError(msg) {
+    const el = document.getElementById("error");
+    el.textContent = msg;
+    el.style.display = "block";
+  }
   function resetForm() {
     document.getElementById("results").style.display = "none";
     document.getElementById("interestInput").value = "";
@@ -318,12 +341,21 @@ def index():
 
 @app.route("/recommend", methods=["POST"])
 def recommend():
-    data = request.get_json()
-    interests = data.get("interests", "")
-    selected_tags = data.get("tags", [])
-    clubs_json = json.dumps(CLUBS)
+    # Always return JSON — never let an exception bubble up as HTML
+    try:
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if not api_key or api_key == "YOUR_API_KEY_HERE":
+            return jsonify({"success": False, "error": "Anthropic API key not set. Edit the cell and replace YOUR_API_KEY_HERE with your real key."}), 400
 
-    prompt = f"""You are a helpful club advisor at Western Washington University (WWU).
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"success": False, "error": "Invalid request body."}), 400
+
+        interests = data.get("interests", "")
+        selected_tags = data.get("tags", [])
+        clubs_json = json.dumps(CLUBS)
+
+        prompt = f"""You are a helpful club advisor at Western Washington University (WWU).
 
 A student has provided the following information about their interests:
 Freeform interests: "{interests}"
@@ -362,8 +394,6 @@ Return ONLY a valid JSON object with no markdown, no explanation, in exactly thi
 
 Return ONLY valid JSON, no markdown, no preamble."""
 
-    try:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         payload = json.dumps({
             "model": "claude-sonnet-4-20250514",
             "max_tokens": 1000,
@@ -381,15 +411,27 @@ Return ONLY valid JSON, no markdown, no preamble."""
             method="POST"
         )
 
-        with urllib.request.urlopen(req) as resp:
-            result = json.loads(resp.read())
-            text = result["content"][0]["text"].strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
+        try:
+            with urllib.request.urlopen(req) as resp:
+                result = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            return jsonify({"success": False, "error": f"Anthropic API error {e.code}: {body}"}), 502
+
+        text = result["content"][0]["text"].strip()
+        # Strip accidental markdown fences
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        text = text.strip()
+
+        try:
             recommendations = json.loads(text)
-            return jsonify({"success": True, "data": recommendations})
+        except json.JSONDecodeError as e:
+            return jsonify({"success": False, "error": f"Could not parse model response as JSON: {e}. Raw: {text[:200]}"}), 500
+
+        return jsonify({"success": True, "data": recommendations})
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
