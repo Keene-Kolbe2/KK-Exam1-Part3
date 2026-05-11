@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
 WWU Club Finder & Recommender
-A self-contained Python web server (stdlib only) that serves a club finder
-for Western Washington University.
+Pure Python stdlib — no pip installs required.
 
-Run with:  python wwu_club_finder.py
-Then open: http://localhost:8080
+Run:  python wwu_club_finder.py
+Open: http://localhost:8080
 """
 
 import http.server
@@ -14,787 +13,833 @@ import json
 
 PORT = 8080
 
-# ──────────────────────────────────────────────────────────────────────────────
-# WWU CLUB DATA
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
+# CLUB DATA
+# ------------------------------------------------------------------------------
 CLUBS = [
-    # ── STEM & Engineering ────────────────────────────────────────────────────
-    {"name": "WWU ACM (Association for Computing Machinery)",
-     "category": "Technology & Computer Science",
-     "description": "Professional and personal development, community-building, and events within the CS department. Open to all identities and majors.",
-     "tags": ["programming", "computer science", "technology", "coding", "software", "networking"]},
-    {"name": "Competitive Programming Club",
-     "category": "Technology & Computer Science",
-     "description": "Practice algorithmic problem-solving and compete in ICPC-style competitions. Weekly meetings focused on interview prep and coding challenges.",
-     "tags": ["programming", "algorithms", "competition", "computer science", "coding"]},
-    {"name": "IEEE (Institute of Electrical and Electronics Engineers)",
-     "category": "Engineering",
-     "description": "Professional society for Electrical & Computer Engineering students. Networking, workshops, and industry connections.",
-     "tags": ["electrical engineering", "computer engineering", "STEM", "circuits", "professional"]},
-    {"name": "Organization of Students of Color in Engineering (OSCE)",
-     "category": "Engineering & Diversity",
-     "description": "Safe space for minorities in engineering and CS, promoting inclusivity and supporting students of color through workshops and events.",
-     "tags": ["engineering", "diversity", "STEM", "inclusion", "computer science", "community"]},
-    {"name": "SACNAS",
-     "category": "STEM & Diversity",
-     "description": "Inclusive organization supporting STEM students, providing access to resources, research opportunities, and networking.",
-     "tags": ["STEM", "science", "diversity", "research", "biology", "chemistry"]},
-    {"name": "WWU Robotics Club",
-     "category": "Engineering & Technology",
-     "description": "Design, build, and program robots for competitions and fun. Welcomes engineers, programmers, and enthusiasts of all skill levels.",
-     "tags": ["robotics", "engineering", "programming", "building", "technology", "mechanical"]},
-    {"name": "Environmental & Sustainability Club",
-     "category": "Environment & Science",
-     "description": "Focuses on environmental advocacy, sustainability initiatives on campus, and connecting students passionate about the planet.",
-     "tags": ["environment", "sustainability", "ecology", "green", "climate", "activism", "nature"]},
-    {"name": "Astronomy Club",
-     "category": "Science",
-     "description": "Stargazing events, telescope observations, and discussions about the cosmos. Open to all curious minds.",
-     "tags": ["astronomy", "space", "science", "physics", "stargazing", "telescope"]},
-    {"name": "Biology Club",
-     "category": "Science",
-     "description": "Connects biology students through academic events, field trips, and professional development opportunities.",
-     "tags": ["biology", "science", "nature", "ecology", "pre-med", "research", "life science"]},
-    {"name": "Chemistry Club",
-     "category": "Science",
-     "description": "Hands-on demonstrations, research discussions, and academic support for chemistry students.",
-     "tags": ["chemistry", "science", "research", "lab", "STEM"]},
-    {"name": "Mathematics Club",
-     "category": "Science & Academics",
-     "description": "Explores mathematical topics beyond the classroom through talks, puzzles, and competitions.",
-     "tags": ["mathematics", "math", "logic", "puzzles", "academics", "STEM"]},
-    {"name": "Pre-Medical Society",
-     "category": "Health & Pre-Professional",
-     "description": "Supports pre-med students with MCAT prep, shadowing opportunities, volunteer events, and medical school application guidance.",
-     "tags": ["pre-med", "medicine", "health", "biology", "chemistry", "MCAT", "doctor"]},
-    {"name": "Geology Club",
-     "category": "Science",
-     "description": "Field trips, rock identification workshops, and connections to Earth sciences at WWU and the Pacific Northwest.",
-     "tags": ["geology", "earth science", "rocks", "field trips", "nature", "science", "Pacific Northwest"]},
-    # ── Arts, Music & Media ───────────────────────────────────────────────────
-    {"name": "KUGS 89.3 FM",
-     "category": "Media & Broadcasting",
-     "description": "Broadcasting since 1974, the voice of WWU students. Hands-on experience in music curation, podcasting, and radio production.",
-     "tags": ["radio", "music", "broadcasting", "podcasting", "media", "audio", "communication"]},
-    {"name": "WWU A Cappella",
-     "category": "Music & Performing Arts",
-     "description": "Student vocal ensemble performing a cappella arrangements of popular songs. Auditions open to all students.",
-     "tags": ["music", "singing", "vocals", "performing arts", "choir", "a cappella"]},
-    {"name": "BIPOC Music Club",
-     "category": "Music & Culture",
-     "description": "A safe environment for musicians of color to share experiences, heal, and celebrate culture through community building and music exploration.",
-     "tags": ["music", "culture", "diversity", "BIPOC", "performing arts", "community"]},
-    {"name": "WWU Film Club",
-     "category": "Media & Arts",
-     "description": "Screenings, discussions, and student filmmaking projects. For lovers of cinema and aspiring filmmakers alike.",
-     "tags": ["film", "cinema", "movies", "media", "arts", "filmmaking", "photography"]},
-    {"name": "Wavelength",
-     "category": "Media & Creative Arts",
-     "description": "A hub for student storytelling, digital content creation, and entertainment exploring authentic student experiences.",
-     "tags": ["storytelling", "content creation", "digital media", "writing", "journalism", "communication"]},
-    {"name": "H.U.E.S Creative Arts Publication",
-     "category": "Arts & Culture",
-     "description": "Community for BIPOC students to create and publish poetry, prose, essays, drawings, paintings, and photography.",
-     "tags": ["creative writing", "poetry", "art", "photography", "BIPOC", "culture", "publication", "visual arts"]},
-    {"name": "Soleil Magazine",
-     "category": "Media & Culture",
-     "description": "Campus publication promoting awareness of the culture and lifestyle of people of color.",
-     "tags": ["magazine", "journalism", "culture", "diversity", "writing", "media", "BIPOC"]},
-    {"name": "WWU Photography Club",
-     "category": "Arts & Media",
-     "description": "Workshops, photo walks, and exhibitions for photographers of all skill levels. Explore the Pacific Northwest through your lens.",
-     "tags": ["photography", "art", "visual arts", "media", "nature", "creative"]},
-    {"name": "Art Club",
-     "category": "Fine Arts",
-     "description": "Open studio time, critique sessions, and collaborative projects for visual artists in all mediums.",
-     "tags": ["art", "painting", "drawing", "visual arts", "sculpture", "creative"]},
-    {"name": "WWU Theatre Club",
-     "category": "Performing Arts",
-     "description": "Student-run productions, improv nights, and workshops for aspiring actors, directors, and stage crew.",
-     "tags": ["theatre", "acting", "performing arts", "drama", "improv", "stage"]},
-    {"name": "Dance Club",
-     "category": "Performing Arts",
-     "description": "Social dance events, workshops in various styles (salsa, swing, contemporary), and performances for all skill levels.",
-     "tags": ["dance", "performing arts", "movement", "social", "fitness"]},
-    # ── Outdoor & Sports ──────────────────────────────────────────────────────
-    {"name": "AS Outdoor Center",
-     "category": "Outdoor Recreation",
-     "description": "Weekend excursions, ski trips, kayaking, equipment rentals, and a bike shop. Explore the stunning Pacific Northwest affordably.",
-     "tags": ["outdoors", "hiking", "kayaking", "skiing", "camping", "nature", "adventure", "Pacific Northwest"]},
-    {"name": "Hiking & Backpacking Club",
-     "category": "Outdoor Recreation",
-     "description": "Organized hikes across the Cascades and Pacific Northwest, from day hikes to multi-day backpacking trips.",
-     "tags": ["hiking", "backpacking", "outdoors", "nature", "mountains", "Pacific Northwest", "adventure"]},
-    {"name": "Rock Climbing Club",
-     "category": "Outdoor Recreation & Sports",
-     "description": "Indoor wall sessions and outdoor climbing trips. Welcomes beginners and experienced climbers.",
-     "tags": ["rock climbing", "bouldering", "outdoors", "sports", "fitness", "adventure"]},
-    {"name": "WWU Sailing Club",
-     "category": "Water Sports",
-     "description": "Sailing lessons and regattas on Bellingham Bay and Lake Whatcom. No experience needed.",
-     "tags": ["sailing", "water sports", "outdoors", "Bellingham Bay", "boating", "recreation"]},
-    {"name": "WWU Cycling Club",
-     "category": "Sports & Outdoor",
-     "description": "Road rides, mountain biking, and casual group cycling around Whatcom County.",
-     "tags": ["cycling", "biking", "outdoors", "sports", "fitness", "mountain biking"]},
-    {"name": "Cold Plunge Club",
-     "category": "Wellness & Outdoor",
-     "description": "Cold water plunges connecting adventurous students while invigorating body and mind.",
-     "tags": ["wellness", "outdoors", "cold plunge", "adventure", "health", "community", "water"]},
-    {"name": "Ultimate Frisbee Club",
-     "category": "Sports",
-     "description": "Competitive and recreational ultimate frisbee. Practices, tournaments, and a welcoming community.",
-     "tags": ["ultimate frisbee", "sports", "outdoor", "team sport", "fitness", "recreation"]},
-    {"name": "Soccer Club",
-     "category": "Sports",
-     "description": "Club soccer for all skill levels. Practices, scrimmages, and tournaments against other Pacific Northwest schools.",
-     "tags": ["soccer", "sports", "team sport", "fitness", "recreation", "outdoor"]},
-    {"name": "Volleyball Club",
-     "category": "Sports",
-     "description": "Indoor and beach volleyball for all levels. Competes against other colleges in the Northwest.",
-     "tags": ["volleyball", "sports", "team sport", "fitness", "recreation"]},
-    {"name": "Martial Arts Club",
-     "category": "Sports & Wellness",
-     "description": "Practice and instruction in various martial arts disciplines including judo, karate, and Brazilian jiu-jitsu.",
-     "tags": ["martial arts", "sports", "fitness", "self-defense", "wellness", "discipline"]},
-    {"name": "Quidditch Club",
-     "category": "Sports & Recreation",
-     "description": "The real-life adaptation of the Harry Potter sport. Fast-paced, inclusive, and surprisingly competitive.",
-     "tags": ["quidditch", "sports", "recreation", "Harry Potter", "fantasy", "team sport"]},
-    # ── Culture & Identity ────────────────────────────────────────────────────
-    {"name": "Black Student Union",
-     "category": "Culture & Identity",
-     "description": "Promotes positive change and social consciousness, providing a safe space for Black, African, and African-American students.",
-     "tags": ["Black culture", "social justice", "community", "identity", "diversity", "advocacy"]},
-    {"name": "Filipino-American Student Association (FASA)",
-     "category": "Culture & Identity",
-     "description": "Unifies students interested in Filipino heritage, raises cultural awareness, and engages in ethnic and civil rights activism.",
-     "tags": ["Filipino", "culture", "Asian American", "heritage", "diversity", "community", "activism"]},
-    {"name": "Japanese Student Association (JSA)",
-     "category": "Culture & Identity",
-     "description": "Promotes Japanese culture, language practice, career seminars, and friendships with international and exchange students.",
-     "tags": ["Japanese", "culture", "language", "Asia", "international", "anime", "heritage"]},
-    {"name": "Jewish Student Union",
-     "category": "Culture & Identity",
-     "description": "Promotes Jewish culture and supports Jewish students in exploring their heritage and enriching the Jewish community.",
-     "tags": ["Jewish", "culture", "religion", "heritage", "community", "identity"]},
-    {"name": "Pacific Islander Student Association",
-     "category": "Culture & Identity",
-     "description": "Shares, preserves, and celebrates Pacific Islander cultures through food, games, and cultural awareness events.",
-     "tags": ["Pacific Islander", "culture", "heritage", "diversity", "community", "food"]},
-    {"name": "Blue Group",
-     "category": "Social Justice & Identity",
-     "description": "Supports undocumented and mixed-status students with resources, DACA information, and a safe community.",
-     "tags": ["immigration", "social justice", "undocumented", "DACA", "community", "support", "advocacy"]},
-    {"name": "First-Generation Club",
-     "category": "Academic Support & Identity",
-     "description": "Empowers first-generation college students by providing community, resources, and guidance for navigating college life.",
-     "tags": ["first generation", "college support", "community", "academic", "mentorship", "identity"]},
-    {"name": "Multicultural Education Club",
-     "category": "Education & Diversity",
-     "description": "Builds inclusive community through professional development, support, and advocacy for diverse educators.",
-     "tags": ["education", "diversity", "teaching", "inclusion", "community", "professional development"]},
-    {"name": "International Students Association",
-     "category": "Culture & International",
-     "description": "Connects international and domestic students through cultural exchange events, friendship, and shared experiences.",
-     "tags": ["international", "culture", "language", "global", "exchange", "community", "travel"]},
-    {"name": "WWU Language Exchange Club",
-     "category": "Language & Culture",
-     "description": "Pairs students for conversation practice in foreign languages. Great for language learners and native speakers.",
-     "tags": ["language", "culture", "Spanish", "French", "Japanese", "international", "linguistics"]},
-    # ── Politics, Law & Social Issues ─────────────────────────────────────────
-    {"name": "Model United Nations (MUN)",
-     "category": "International Affairs & Politics",
-     "description": "Simulates UN committees, debates international issues, and competes at conferences across the Northwest and beyond.",
-     "tags": ["politics", "international relations", "debate", "diplomacy", "public speaking", "global affairs"]},
-    {"name": "International Affairs Association (IAA)",
-     "category": "International Affairs & Politics",
-     "description": "Enhances global perspective and leadership through discussions, events, and MUN sponsorship.",
-     "tags": ["international relations", "politics", "global affairs", "leadership", "diplomacy"]},
-    {"name": "Political Science Association (PSA)",
-     "category": "Politics",
-     "description": "Unbiased forum for students to discuss political issues affecting our country and world. Hosts annual PSA Student Conference.",
-     "tags": ["politics", "government", "policy", "debate", "current events", "political science"]},
-    {"name": "WWU Pre-Law Society",
-     "category": "Pre-Professional & Law",
-     "description": "Prepares students for law school through LSAT prep sessions, networking with legal professionals, and mock trials.",
-     "tags": ["law", "pre-law", "LSAT", "legal", "debate", "criminal justice", "policy"]},
-    {"name": "Environmental Justice Club",
-     "category": "Activism & Environment",
-     "description": "Combines environmental advocacy with social justice, addressing disproportionate environmental impacts on marginalized communities.",
-     "tags": ["environment", "social justice", "activism", "climate change", "policy", "advocacy"]},
-    # ── Business & Entrepreneurship ───────────────────────────────────────────
-    {"name": "WWU Entrepreneurship Club",
-     "category": "Business & Entrepreneurship",
-     "description": "Connects aspiring entrepreneurs through speaker events, pitch competitions, and startup incubator resources.",
-     "tags": ["entrepreneurship", "business", "startup", "innovation", "networking", "finance"]},
-    {"name": "Finance & Investment Club",
-     "category": "Business & Finance",
-     "description": "Explores stock markets, investment strategies, and financial modeling. Manages a student investment portfolio.",
-     "tags": ["finance", "investing", "stocks", "business", "economics", "money", "accounting"]},
-    {"name": "Marketing Club",
-     "category": "Business & Marketing",
-     "description": "Real-world marketing projects, case competitions, and professional development for future marketers.",
-     "tags": ["marketing", "business", "advertising", "social media", "branding", "communication"]},
-    {"name": "American Marketing Association WWU Chapter",
-     "category": "Business & Marketing",
-     "description": "Professional marketing organization with national competitions, networking, and leadership development.",
-     "tags": ["marketing", "business", "professional", "networking", "branding", "advertising"]},
-    # ── Health, Wellness & Community ──────────────────────────────────────────
-    {"name": "WWU Yoga & Meditation Club",
-     "category": "Health & Wellness",
-     "description": "Regular yoga sessions and guided meditation for stress relief and mindfulness. All experience levels welcome.",
-     "tags": ["yoga", "meditation", "wellness", "mindfulness", "health", "fitness", "mental health"]},
-    {"name": "Mental Health Awareness Club",
-     "category": "Health & Wellness",
-     "description": "Destigmatizes mental health through awareness campaigns, peer support, and community events.",
-     "tags": ["mental health", "wellness", "support", "community", "awareness", "psychology"]},
-    {"name": "Habitat for Humanity WWU Chapter",
-     "category": "Community Service",
-     "description": "Builds affordable housing in the Bellingham community through volunteer construction projects and fundraising.",
-     "tags": ["volunteer", "community service", "housing", "construction", "social good", "Bellingham"]},
-    {"name": "WWU Debate Club",
-     "category": "Academics & Communication",
-     "description": "Competitive and parliamentary debate, developing critical thinking and persuasive communication skills.",
-     "tags": ["debate", "public speaking", "critical thinking", "argumentation", "communication", "politics"]},
-    {"name": "Creative Writing Club",
-     "category": "Arts & Literature",
-     "description": "Workshop-style meetings for fiction, poetry, and creative nonfiction writers. Supportive critique and publishing opportunities.",
-     "tags": ["writing", "creative writing", "poetry", "fiction", "literature", "storytelling"]},
-    {"name": "Book Club",
-     "category": "Literature & Academics",
-     "description": "Monthly reads spanning genres from literary fiction to sci-fi. Lively discussions and author events.",
-     "tags": ["books", "reading", "literature", "fiction", "sci-fi", "fantasy", "discussion"]},
-    {"name": "WWU Gaming Club",
-     "category": "Gaming & Recreation",
-     "description": "Video gaming, tabletop RPGs, board games, and esports tournaments. Casual and competitive play.",
-     "tags": ["gaming", "video games", "esports", "board games", "tabletop", "RPG", "recreation"]},
-    {"name": "Dungeons and Dragons Club",
-     "category": "Gaming & Recreation",
-     "description": "Campaign nights, one-shots, and a welcoming community for tabletop RPG enthusiasts of all experience levels.",
-     "tags": ["D&D", "tabletop", "RPG", "gaming", "fantasy", "storytelling", "board games"]},
-    {"name": "Anime Club",
-     "category": "Pop Culture & Media",
-     "description": "Weekly screenings of anime series and films, manga reading discussions, and cultural exchange.",
-     "tags": ["anime", "manga", "Japanese culture", "pop culture", "media", "gaming"]},
-    {"name": "WWU Food and Culinary Club",
-     "category": "Food & Community",
-     "description": "Cooking workshops, potlucks, food tours, and exploring cuisines from around the world.",
-     "tags": ["cooking", "food", "culinary", "culture", "community", "baking", "nutrition"]},
-    {"name": "Sustainability and Zero Waste Club",
-     "category": "Environment",
-     "description": "Promotes zero-waste lifestyles, campus composting initiatives, and sustainable consumption habits.",
-     "tags": ["sustainability", "zero waste", "environment", "green", "eco", "climate", "recycling"]},
-    {"name": "WWU Chess Club",
-     "category": "Games & Strategy",
-     "description": "Casual and tournament chess for all skill levels. Weekly meetings and interscholastic competition.",
-     "tags": ["chess", "strategy", "games", "competition", "logic", "academics"]},
-    {"name": "Psychology Club",
-     "category": "Academics",
-     "description": "Guest lectures, research discussions, and career guidance for psychology students and enthusiasts.",
-     "tags": ["psychology", "mental health", "research", "academics", "behavior", "neuroscience"]},
-    {"name": "Sociology and Anthropology Club",
-     "category": "Academics & Social Sciences",
-     "description": "Explores sociological and anthropological topics through discussions, field studies, and community engagement.",
-     "tags": ["sociology", "anthropology", "social science", "culture", "community", "research"]},
-    {"name": "WWU Surf Club",
-     "category": "Water Sports & Outdoor",
-     "description": "Day trips to Pacific Coast surf spots, lessons for beginners, and community for surfers in the Pacific Northwest.",
-     "tags": ["surfing", "water sports", "outdoor", "ocean", "adventure", "Pacific Northwest"]},
-    {"name": "Badminton Club",
-     "category": "Sports & Recreation",
-     "description": "Open courts for casual and competitive badminton. A fun way to stay active and meet people.",
-     "tags": ["badminton", "sports", "fitness", "recreation", "indoor sports"]},
-    {"name": "WWU Running Club",
-     "category": "Sports & Fitness",
-     "description": "Group runs of all distances, trail runs in Whatcom County, and training for local races.",
-     "tags": ["running", "fitness", "sports", "trail running", "health", "outdoor"]},
+    {
+        "name": "Japanese Club",
+        "category": "Culture & Language",
+        "description": "Explore Japanese language, culture, cuisine, and traditions. Great for learners and heritage speakers alike.",
+        "tags": ["Japanese", "language", "culture", "anime", "food", "international"]
+    },
+    {
+        "name": "Korean Club",
+        "category": "Culture & Language",
+        "description": "Celebrate Korean culture through language practice, K-pop, food events, and cultural exchanges.",
+        "tags": ["Korean", "language", "culture", "K-pop", "food", "international"]
+    },
+    {
+        "name": "Baking Club",
+        "category": "Food & Lifestyle",
+        "description": "Weekly baking sessions covering everything from artisan bread to elaborate pastries. All skill levels welcome.",
+        "tags": ["baking", "food", "cooking", "desserts", "creative", "community"]
+    },
+    {
+        "name": "D&D Club",
+        "category": "Gaming & Tabletop",
+        "description": "Dungeons & Dragons campaigns, one-shots, and tabletop RPG nights. Join an existing party or start your own adventure.",
+        "tags": ["D&D", "tabletop", "RPG", "fantasy", "storytelling", "gaming", "board games"]
+    },
+    {
+        "name": "Video Games Club",
+        "category": "Gaming & Esports",
+        "description": "Casual play sessions, competitive esports, game nights, and gaming tournaments across all platforms and genres.",
+        "tags": ["video games", "esports", "gaming", "competitive", "Nintendo", "PC gaming", "console"]
+    },
+    {
+        "name": "Soccer Club",
+        "category": "Sports & Athletics",
+        "description": "Recreational and competitive soccer for all skill levels. Regular practices, scrimmages, and inter-collegiate matches.",
+        "tags": ["soccer", "sports", "outdoor", "team sport", "fitness", "athletics", "competitive"]
+    },
+    {
+        "name": "Volleyball Club",
+        "category": "Sports & Athletics",
+        "description": "Indoor and beach volleyball for all experience levels. Fun practices, drills, and tournament play.",
+        "tags": ["volleyball", "sports", "team sport", "fitness", "athletics", "indoor", "beach"]
+    },
+    {
+        "name": "MIS Club",
+        "category": "Technology & Business",
+        "description": "Management Information Systems club focused on the intersection of business and technology — data analytics, IT strategy, and career development.",
+        "tags": ["MIS", "technology", "business", "data", "IT", "analytics", "information systems", "professional"]
+    },
+    {
+        "name": "Business Club",
+        "category": "Business & Professional",
+        "description": "Entrepreneurship, networking, case competitions, and professional development for future business leaders.",
+        "tags": ["business", "entrepreneurship", "networking", "finance", "marketing", "professional", "career"]
+    },
+    {
+        "name": "Film Club",
+        "category": "Arts & Media",
+        "description": "Screenings of classic and contemporary films, filmmaking workshops, and student short film productions.",
+        "tags": ["film", "cinema", "movies", "filmmaking", "media", "storytelling", "creative", "arts"]
+    },
+    {
+        "name": "Art Club",
+        "category": "Visual Arts",
+        "description": "Open studio sessions, critiques, and collaborative projects across painting, drawing, sculpture, and mixed media.",
+        "tags": ["art", "painting", "drawing", "visual arts", "sculpture", "creative", "design", "illustration"]
+    },
+    {
+        "name": "Poetry Club",
+        "category": "Writing & Literature",
+        "description": "Open mic nights, writing workshops, and a supportive community for poets of all styles — spoken word to haiku.",
+        "tags": ["poetry", "writing", "literature", "spoken word", "creative writing", "storytelling", "language"]
+    },
+    {
+        "name": "Music Club",
+        "category": "Music & Performing Arts",
+        "description": "A space for musicians of all genres and skill levels — jams, open mics, songwriting workshops, and ensemble play.",
+        "tags": ["music", "instruments", "singing", "songwriting", "performing arts", "band", "creative"]
+    },
+    {
+        "name": "Biking Club",
+        "category": "Outdoor Recreation & Sports",
+        "description": "Road rides, mountain biking trails, and casual group rides around Bellingham and Whatcom County.",
+        "tags": ["biking", "cycling", "outdoor", "mountain biking", "fitness", "nature", "adventure", "Pacific Northwest"]
+    },
 ]
 
 PRESETS = [
-    "Technology", "Engineering", "Art & Design", "Music", "Film & Media",
-    "Outdoors & Hiking", "Sports & Fitness", "Environmental Issues",
-    "Politics & Global Affairs", "Business & Entrepreneurship",
-    "Science & Research", "Writing & Journalism", "Gaming",
-    "Culture & Identity", "Performing Arts", "Social Justice",
-    "Anime & Pop Culture", "Food & Cooking", "Mental Health & Wellness",
-    "Photography", "Language & Linguistics", "Pre-Med / Health",
-    "Law & Policy", "Water Sports", "Mathematics", "Finance",
-    "Community Service", "Debate & Public Speaking",
+    "Art & Design", "Music", "Sports & Fitness", "Gaming",
+    "Outdoor & Nature", "Food & Cooking", "Culture & Language",
+    "Technology", "Business & Careers", "Film & Media",
+    "Writing & Poetry", "Anime & K-pop", "Team Sports",
+    "Competitive / Esports", "Creative Arts", "Adventure",
+    "Storytelling", "International Culture", "Cycling",
+    "Fitness", "Movies", "Board Games", "Fantasy & RPG",
 ]
 
-# ──────────────────────────────────────────────────────────────────────────────
-# BUILD THE HTML PAGE — inject data via format() with explicit placeholders
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
+# HTML BUILDER — uses string concatenation, never .format() or f-strings
+# with the JS payload, so curly braces are 100% safe.
+# ------------------------------------------------------------------------------
 def build_html():
-    clubs_json = json.dumps(CLUBS, ensure_ascii=True)
+    clubs_json   = json.dumps(CLUBS,   ensure_ascii=True)
     presets_json = json.dumps(PRESETS, ensure_ascii=True)
 
-    # Use concatenation so no f-string / .format() ambiguity with JS braces
-    html = (
-        """<!DOCTYPE html>
+    head = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WWU Club Finder — Western Washington University</title>
+<title>WWU Club Finder</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --wwu-royal:   #003F87;
-  --wwu-gold:    #C89B2A;
-  --wwu-gold-lt: #F0C84A;
-  --wwu-navy:    #00244D;
-  --wwu-steel:   #5B7FA6;
-  --wwu-fog:     #EDF2F7;
-  --wwu-white:   #FFFFFF;
-  --wwu-text:    #1A2535;
-  --wwu-muted:   #637184;
-  --wwu-border:  #C9D8EA;
-  --card-radius: 10px;
-  --transition:  0.22s ease;
+  --blue:       #003F87;
+  --blue-dark:  #00244D;
+  --blue-mid:   #1254A1;
+  --blue-soft:  #5B7FA6;
+  --gold:       #C89B2A;
+  --gold-light: #F0C84A;
+  --gold-pale:  #FDF5DC;
+  --bg:         #F4F7FC;
+  --surface:    #FFFFFF;
+  --border:     #D0DDF0;
+  --text:       #0F1C30;
+  --muted:      #5A6A80;
+  --radius:     12px;
+  --ease:       cubic-bezier(0.4,0,0.2,1);
 }
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Source Sans 3', sans-serif; background: var(--wwu-fog); color: var(--wwu-text); min-height: 100vh; }
 
-/* Header */
-header {
-  background: linear-gradient(135deg, var(--wwu-navy) 0%, var(--wwu-royal) 60%, #1254A1 100%);
-  color: var(--wwu-white);
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ── HERO ── */
+.hero {
+  background: var(--blue-dark);
   position: relative;
   overflow: hidden;
+  padding: 0;
 }
-header::before {
-  content: '';
+.hero-mesh {
   position: absolute; inset: 0;
-  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 50%, rgba(18,84,161,0.7) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 80% at 80% 20%, rgba(200,155,42,0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 40% 40% at 70% 80%, rgba(0,63,135,0.5) 0%, transparent 50%);
   pointer-events: none;
 }
-.header-inner { max-width: 900px; margin: 0 auto; padding: 40px 24px 36px; position: relative; }
-.header-badge {
-  display: inline-flex; align-items: center; gap: 8px;
-  background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
-  border-radius: 20px; padding: 4px 14px;
-  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em;
-  text-transform: uppercase; margin-bottom: 18px;
+.hero-lines {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,0.025) 0px,
+      rgba(255,255,255,0.025) 1px,
+      transparent 1px,
+      transparent 80px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255,255,255,0.025) 0px,
+      rgba(255,255,255,0.025) 1px,
+      transparent 1px,
+      transparent 80px
+    );
 }
-.header-badge::before {
-  content: ''; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--wwu-gold-lt); flex-shrink: 0;
+.hero-inner {
+  position: relative;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 64px 28px 56px;
 }
-header h1 {
-  font-family: 'Libre Baskerville', serif;
-  font-size: clamp(1.9rem, 4vw, 2.8rem);
-  font-weight: 700; line-height: 1.15; margin-bottom: 10px;
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-light);
+  margin-bottom: 20px;
 }
-header h1 span { color: var(--wwu-gold-lt); }
-header p.subtitle { font-size: 1.05rem; color: rgba(255,255,255,0.78); max-width: 540px; line-height: 1.6; }
-
-/* Main */
-main { max-width: 900px; margin: 0 auto; padding: 36px 24px 60px; }
-
-/* Section label */
-.section-label {
-  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--wwu-royal); margin-bottom: 10px;
+.hero-eyebrow::before {
+  content: '';
+  display: block;
+  width: 28px; height: 2px;
+  background: var(--gold-light);
+  border-radius: 2px;
+}
+.hero h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(2.2rem, 5.5vw, 3.6rem);
+  line-height: 1.08;
+  color: #fff;
+  margin-bottom: 18px;
+}
+.hero h1 em {
+  font-style: italic;
+  color: var(--gold-light);
+}
+.hero-sub {
+  font-size: 1.05rem;
+  font-weight: 300;
+  color: rgba(255,255,255,0.7);
+  max-width: 480px;
+  line-height: 1.7;
+}
+.hero-bar {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 50%, transparent 100%);
 }
 
-/* Interest section */
-.tag-section { margin-bottom: 28px; }
-.tag-section h2 { font-family: 'Libre Baskerville', serif; font-size: 1.2rem; margin-bottom: 6px; color: var(--wwu-navy); }
-.tag-section p { font-size: 0.92rem; color: var(--wwu-muted); margin-bottom: 16px; line-height: 1.55; }
+/* ── MAIN ── */
+main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 44px 28px 80px;
+}
 
-.tags-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+/* ── STEP LABEL ── */
+.step-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.step-num {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.step-text {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--blue-soft);
+}
+
+/* ── SECTION HEADING ── */
+.section-head {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5rem;
+  color: var(--blue-dark);
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+.section-desc {
+  font-size: 0.92rem;
+  color: var(--muted);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+/* ── PRESET TAG PILLS ── */
+.tags-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
 .tag-pill {
-  cursor: pointer; border: 2px solid var(--wwu-border); border-radius: 20px;
-  padding: 6px 16px; font-size: 0.86rem; font-weight: 600;
-  color: var(--wwu-muted); background: var(--wwu-white);
-  transition: all var(--transition); user-select: none;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 18px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--surface);
+  transition: all 0.18s var(--ease);
+  font-family: 'DM Sans', sans-serif;
+  line-height: 1;
 }
-.tag-pill:hover { border-color: var(--wwu-steel); color: var(--wwu-royal); }
-.tag-pill.selected { background: var(--wwu-royal); border-color: var(--wwu-royal); color: var(--wwu-white); }
+.tag-pill:hover {
+  border-color: var(--blue-soft);
+  color: var(--blue);
+  background: #EEF4FF;
+}
+.tag-pill.on {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,63,135,0.22);
+}
 
-/* Custom input */
-.custom-input-row { display: flex; gap: 10px; margin-top: 6px; }
-.custom-input-row input {
-  flex: 1; border: 2px solid var(--wwu-border); border-radius: 8px;
-  padding: 10px 14px; font-size: 0.9rem; font-family: inherit;
-  color: var(--wwu-text); background: var(--wwu-white); outline: none;
-  transition: border-color var(--transition);
+/* ── CUSTOM INPUT ── */
+.input-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
 }
-.custom-input-row input:focus { border-color: var(--wwu-royal); }
-.custom-input-row input::placeholder { color: #aab4c0; }
-button.add-btn {
-  background: var(--wwu-steel); color: white; border: none; border-radius: 8px;
-  padding: 10px 20px; font-size: 0.88rem; font-weight: 600; cursor: pointer;
-  font-family: inherit; transition: background var(--transition); white-space: nowrap;
+.input-row input {
+  flex: 1;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 11px 16px;
+  font-size: 0.9rem;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.18s var(--ease);
 }
-button.add-btn:hover { background: var(--wwu-royal); }
+.input-row input:focus { border-color: var(--blue); }
+.input-row input::placeholder { color: #A8B8CC; }
+.btn-add {
+  border: none;
+  border-radius: var(--radius);
+  padding: 11px 22px;
+  background: var(--blue-soft);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s var(--ease);
+}
+.btn-add:hover { background: var(--blue); }
 
-/* Selected tags */
-#selected-display { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 7px; min-height: 10px; }
-.selected-tag {
-  display: inline-flex; align-items: center; gap: 6px;
-  background: var(--wwu-royal); color: white;
-  border-radius: 20px; padding: 4px 12px 4px 14px;
-  font-size: 0.83rem; font-weight: 600;
+/* ── SELECTED CHIPS ── */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 16px;
+  min-height: 8px;
 }
-.selected-tag button {
-  background: none; border: none; color: rgba(255,255,255,0.7);
-  cursor: pointer; font-size: 1rem; line-height: 1; padding: 0; display: flex;
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--blue);
+  color: #fff;
+  border-radius: 999px;
+  padding: 5px 8px 5px 14px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  animation: popIn 0.2s var(--ease) both;
 }
-.selected-tag button:hover { color: white; }
+.chip-x {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  transition: background 0.15s;
+}
+.chip-x:hover { background: rgba(255,255,255,0.4); }
+@keyframes popIn { from { opacity:0; transform:scale(0.8); } to { opacity:1; transform:scale(1); } }
 
-/* Find button */
-.find-btn-wrap { margin: 26px 0 8px; }
-button.find-btn {
-  background: linear-gradient(135deg, var(--wwu-royal) 0%, #1254A1 100%);
-  color: white; border: none; border-radius: 10px; padding: 14px 36px;
-  font-size: 1rem; font-weight: 700; cursor: pointer; font-family: inherit;
-  letter-spacing: 0.02em; transition: opacity var(--transition), transform var(--transition);
-  box-shadow: 0 4px 16px rgba(0,63,135,0.25);
-}
-button.find-btn:hover:not(:disabled) { opacity: 0.92; transform: translateY(-1px); }
-button.find-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+/* ── DIVIDER ── */
+.divider { height: 1px; background: var(--border); margin: 32px 0; }
 
-/* Loading */
-.loading { display: none; align-items: center; gap: 12px; margin-top: 28px; color: var(--wwu-royal); font-weight: 600; }
-.loading.active { display: flex; }
-.spinner {
-  width: 22px; height: 22px; border: 3px solid var(--wwu-border);
-  border-top-color: var(--wwu-royal); border-radius: 50%;
-  animation: spin 0.75s linear infinite; flex-shrink: 0;
+/* ── FIND BUTTON ── */
+.btn-find {
+  border: none;
+  border-radius: var(--radius);
+  padding: 15px 42px;
+  background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue-mid) 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  box-shadow: 0 4px 20px rgba(0,36,77,0.28);
+  transition: opacity 0.18s, transform 0.18s var(--ease);
+}
+.btn-find:hover:not(:disabled) { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,36,77,0.32); }
+.btn-find:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+/* ── SPINNER ── */
+.loader {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  color: var(--blue);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+.loader.show { display: flex; }
+.spin {
+  width: 20px; height: 20px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Results */
-#results { margin-top: 36px; }
-#results h2 { font-family: 'Libre Baskerville', serif; font-size: 1.45rem; color: var(--wwu-navy); margin-bottom: 6px; }
-.results-summary { font-size: 0.92rem; color: var(--wwu-muted); margin-bottom: 24px; }
-.results-group-label {
-  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase;
-  color: var(--wwu-steel); margin: 28px 0 12px;
-  display: flex; align-items: center; gap: 10px;
+/* ── ERROR ── */
+.err-box {
+  background: #fff2f2;
+  border: 1.5px solid #f7c5c5;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  color: #a80000;
+  font-size: 0.88rem;
+  margin-top: 18px;
 }
-.results-group-label::after { content: ''; flex: 1; height: 1px; background: var(--wwu-border); }
 
-/* Cards */
-.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
-.club-card {
-  background: var(--wwu-white); border: 1.5px solid var(--wwu-border);
-  border-radius: var(--card-radius); padding: 20px 22px;
-  transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition);
-  animation: fadeUp 0.35s ease both;
+/* ── RESULTS ── */
+#results { margin-top: 48px; display: none; }
+.results-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.7rem;
+  color: var(--blue-dark);
+  margin-bottom: 6px;
 }
-.club-card:hover { box-shadow: 0 6px 20px rgba(0,63,135,0.12); border-color: var(--wwu-steel); transform: translateY(-2px); }
-.club-card.matched { border-left: 4px solid var(--wwu-royal); }
-.club-card.suggested { border-left: 4px solid var(--wwu-gold); }
-.card-category { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--wwu-steel); margin-bottom: 7px; }
-.card-name { font-family: 'Libre Baskerville', serif; font-size: 1.02rem; font-weight: 700; color: var(--wwu-navy); margin-bottom: 8px; line-height: 1.3; }
-.card-description { font-size: 0.87rem; color: var(--wwu-muted); line-height: 1.55; margin-bottom: 12px; }
+.results-sub {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+.group-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blue-soft);
+  margin-bottom: 14px;
+}
+.group-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── CARDS ── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 16px;
+  margin-bottom: 36px;
+}
+.card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 22px 18px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), border-color 0.2s;
+  animation: riseUp 0.38s var(--ease) both;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 4px; height: 100%;
+}
+.card.match::before  { background: var(--blue); }
+.card.disco::before  { background: var(--gold); }
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0,36,77,0.1);
+  border-color: var(--blue-soft);
+}
+@keyframes riseUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
+
+.card-cat {
+  font-size: 0.69rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--blue-soft);
+  margin-bottom: 6px;
+}
+.card-name {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.12rem;
+  color: var(--blue-dark);
+  margin-bottom: 8px;
+  line-height: 1.25;
+}
+.card-desc {
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
 .card-reason {
-  font-size: 0.82rem; color: var(--wwu-text); line-height: 1.5;
-  background: var(--wwu-fog); border-radius: 6px; padding: 9px 11px; margin-bottom: 12px;
-  border-left: 3px solid var(--wwu-royal);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
 }
-.club-card.suggested .card-reason { border-left-color: var(--wwu-gold); }
-.card-match-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 0.75rem; font-weight: 700; padding: 3px 10px;
-  border-radius: 12px; letter-spacing: 0.04em;
+.card.match .card-reason { border-left: 3px solid var(--blue); }
+.card.disco .card-reason { border-left: 3px solid var(--gold); }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  padding: 3px 11px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
 }
-.badge-match { background: rgba(0,63,135,0.1); color: var(--wwu-royal); }
-.badge-suggest { background: rgba(200,155,42,0.15); color: #8a6900; }
+.badge-match { background: rgba(0,63,135,0.09); color: var(--blue); }
+.badge-disco { background: var(--gold-pale); color: #7a5800; }
 .card-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .card-tag {
-  font-size: 0.72rem; background: var(--wwu-fog); color: var(--wwu-muted);
-  border-radius: 10px; padding: 2px 9px; font-weight: 600; border: 1px solid var(--wwu-border);
+  font-size: 0.71rem; font-weight: 500;
+  background: var(--bg); color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 2px 10px;
 }
-@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Error */
-.error-box { background: #fff5f5; border: 1.5px solid #f5c0c0; border-radius: 8px; padding: 16px 20px; color: #b30000; font-size: 0.9rem; margin-top: 20px; }
-
-/* Footer */
-footer { text-align: center; padding: 24px 16px; font-size: 0.8rem; color: var(--wwu-muted); border-top: 1px solid var(--wwu-border); }
-footer a { color: var(--wwu-royal); text-decoration: none; }
+/* ── FOOTER ── */
+footer {
+  text-align: center;
+  padding: 22px 16px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+footer a { color: var(--blue); text-decoration: none; }
 footer a:hover { text-decoration: underline; }
 
-@media (max-width: 600px) {
-  .cards-grid { grid-template-columns: 1fr; }
-  .custom-input-row { flex-direction: column; }
+/* ── RESPONSIVE ── */
+@media (max-width: 560px) {
+  .cards { grid-template-columns: 1fr; }
+  .input-row { flex-direction: column; }
+  .hero-inner { padding: 48px 20px 40px; }
+  main { padding: 32px 20px 60px; }
 }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="header-inner">
-    <div class="header-badge">Western Washington University</div>
-    <h1>Find Your <span>Viking</span> Community</h1>
-    <p class="subtitle">Tell us what you are passionate about and we will match you with clubs at WWU — plus a few surprises you might love.</p>
+<div class="hero">
+  <div class="hero-mesh"></div>
+  <div class="hero-lines"></div>
+  <div class="hero-inner">
+    <div class="hero-eyebrow">Western Washington University</div>
+    <h1>Find Your<br><em>Viking Community</em></h1>
+    <p class="hero-sub">Tell us what excites you and we will match you with clubs at WWU&nbsp;&mdash; plus a few unexpected picks you might love.</p>
   </div>
-</header>
+  <div class="hero-bar"></div>
+</div>
 
 <main>
-  <div class="tag-section">
-    <div class="section-label">Step 1</div>
-    <h2>What are your interests?</h2>
-    <p>Select from the categories below, or type your own. Pick as many as you like.</p>
-    <div class="tags-grid" id="preset-tags"></div>
-    <div class="custom-input-row">
-      <input type="text" id="custom-input" placeholder="Type an interest (e.g. astronomy, social justice, baking...)" autocomplete="off">
-      <button class="add-btn" onclick="addCustomTag()">+ Add</button>
-    </div>
-    <div id="selected-display"></div>
+
+  <div class="step-label"><span class="step-num">1</span><span class="step-text">Choose your interests</span></div>
+  <h2 class="section-head">What are you into?</h2>
+  <p class="section-desc">Pick from the suggestions below or type your own. Choose as many as you like.</p>
+
+  <div class="tags-grid" id="preset-tags"></div>
+
+  <div class="input-row">
+    <input type="text" id="custom-input" placeholder="Type anything — e.g. cooking, hiking, photography..." autocomplete="off">
+    <button class="btn-add" onclick="addCustom()">+ Add</button>
   </div>
 
-  <div class="find-btn-wrap">
-    <button class="find-btn" id="find-btn" onclick="findClubs()">Find My Clubs &rarr;</button>
+  <div class="chips" id="chips"></div>
+
+  <div class="divider"></div>
+
+  <button class="btn-find" id="find-btn" onclick="findClubs()">Find My Clubs &rarr;</button>
+
+  <div class="loader" id="loader">
+    <div class="spin"></div>
+    <span>Matching you with clubs&hellip;</span>
   </div>
 
-  <div class="loading" id="loading">
-    <div class="spinner"></div>
-    <span>Finding your perfect clubs...</span>
-  </div>
+  <div id="err"></div>
 
-  <div id="error-container"></div>
+  <section id="results">
+    <h2 class="results-title">Your Club Matches</h2>
+    <p class="results-sub" id="results-sub"></p>
+    <div id="matched-group"></div>
+    <div id="disco-group"></div>
+  </section>
 
-  <div id="results" style="display:none;">
-    <h2>Your Club Matches</h2>
-    <p class="results-summary" id="results-summary"></p>
-    <div id="matched-section"></div>
-    <div id="suggested-section"></div>
-  </div>
 </main>
 
 <footer>
-  <p>Club data sourced from <a href="https://win.wwu.edu/organizations" target="_blank">Western Involvement Network</a> &amp; <a href="https://engage.wwu.edu/programs/clubs/" target="_blank">WWU Club Hub</a> &bull; 2025</p>
+  Data sourced from <a href="https://win.wwu.edu/organizations" target="_blank">Western Involvement Network</a> &amp;
+  <a href="https://engage.wwu.edu/programs/clubs/" target="_blank">WWU Club Hub</a> &bull; 2025
 </footer>
 
 <script>
-var ALL_CLUBS = """
-        + clubs_json
-        + """;
-var PRESETS = """
-        + presets_json
-        + """;
+var CLUBS   = """ + clubs_json   + """;
+var PRESETS = """ + presets_json + """;
 
-var selectedInterests = {};
+/* ── State ── */
+var selected = {};
 
-// Render preset tag pills
+/* ── Render preset pills ── */
 var grid = document.getElementById('preset-tags');
 PRESETS.forEach(function(tag) {
-  var pill = document.createElement('button');
-  pill.className = 'tag-pill';
-  pill.textContent = tag;
-  pill.addEventListener('click', function() { togglePreset(tag, pill); });
-  grid.appendChild(pill);
+  var b = document.createElement('button');
+  b.className = 'tag-pill';
+  b.textContent = tag;
+  b.addEventListener('click', function() {
+    if (selected[tag]) { delete selected[tag]; }
+    else               { selected[tag] = true; }
+    renderChips();
+    syncPills();
+  });
+  grid.appendChild(b);
 });
 
-function togglePreset(tag, el) {
-  if (selectedInterests[tag]) {
-    delete selectedInterests[tag];
-    el.classList.remove('selected');
-  } else {
-    selectedInterests[tag] = true;
-    el.classList.add('selected');
-  }
-  renderSelected();
+function syncPills() {
+  document.querySelectorAll('.tag-pill').forEach(function(p) {
+    p.classList.toggle('on', !!selected[p.textContent]);
+  });
 }
 
-function addCustomTag() {
+function addCustom() {
   var inp = document.getElementById('custom-input');
-  var val = inp.value.trim();
-  if (!val) return;
-  selectedInterests[val] = true;
+  var v = inp.value.trim();
+  if (!v) return;
+  selected[v] = true;
   inp.value = '';
-  renderSelected();
+  renderChips();
+  syncPills();
 }
-
 document.getElementById('custom-input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') addCustomTag();
+  if (e.key === 'Enter') addCustom();
 });
 
-function renderSelected() {
-  var container = document.getElementById('selected-display');
-  container.innerHTML = '';
-  Object.keys(selectedInterests).forEach(function(tag) {
-    var span = document.createElement('span');
-    span.className = 'selected-tag';
-    var label = document.createTextNode(tag + ' ');
-    span.appendChild(label);
-    var btn = document.createElement('button');
-    btn.textContent = '\u2715';
-    btn.title = 'Remove';
-    btn.addEventListener('click', (function(t) {
-      return function() { removeTag(t); };
-    })(tag));
-    span.appendChild(btn);
-    container.appendChild(span);
-  });
-  document.querySelectorAll('.tag-pill').forEach(function(pill) {
-    pill.classList.toggle('selected', !!selectedInterests[pill.textContent]);
+function renderChips() {
+  var c = document.getElementById('chips');
+  c.innerHTML = '';
+  Object.keys(selected).forEach(function(tag) {
+    var s = document.createElement('span');
+    s.className = 'chip';
+    var txt = document.createTextNode(tag);
+    s.appendChild(txt);
+    var x = document.createElement('button');
+    x.className = 'chip-x';
+    x.textContent = '\u2715';
+    x.addEventListener('click', (function(t){ return function(){ delete selected[t]; renderChips(); syncPills(); }; })(tag));
+    s.appendChild(x);
+    c.appendChild(s);
   });
 }
 
-function removeTag(tag) {
-  delete selectedInterests[tag];
-  renderSelected();
-}
-
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
+/* ── Main search ── */
 function findClubs() {
-  var keys = Object.keys(selectedInterests);
-  if (keys.length === 0) {
-    alert('Please select at least one interest first!');
-    return;
-  }
+  var keys = Object.keys(selected);
+  if (keys.length === 0) { alert('Please pick at least one interest first!'); return; }
 
-  var btn = document.getElementById('find-btn');
-  var loading = document.getElementById('loading');
-  var errorContainer = document.getElementById('error-container');
-  var resultsDiv = document.getElementById('results');
+  var btn    = document.getElementById('find-btn');
+  var loader = document.getElementById('loader');
+  var errDiv = document.getElementById('err');
+  var resDiv = document.getElementById('results');
 
   btn.disabled = true;
-  loading.classList.add('active');
-  errorContainer.innerHTML = '';
-  resultsDiv.style.display = 'none';
+  loader.classList.add('show');
+  errDiv.innerHTML = '';
+  resDiv.style.display = 'none';
 
-  var interestsList = keys.join(', ');
-  var clubsSummary = ALL_CLUBS.map(function(c) {
-    return 'Name:' + c.name + '|Cat:' + c.category + '|Tags:' + c.tags.join(',');
-  }).join('\\n');
+  var interests = keys.join(', ');
 
-  var prompt = 'You are a helpful club advisor for Western Washington University (WWU).\\n'
-    + 'A student has the following interests: ' + interestsList + '\\n\\n'
-    + 'Here is the complete list of WWU clubs (Name | Category | Tags):\\n'
-    + clubsSummary + '\\n\\n'
-    + 'Your task:\\n'
-    + '1. Select the 6 best MATCHING clubs that directly align with the student interests.\\n'
-    + '2. Select 4 DISCOVERY clubs outside their stated interests that might pleasantly surprise this student.\\n\\n'
-    + 'Respond ONLY with valid JSON in exactly this structure (no markdown, no extra text):\\n'
-    + '{\\n'
-    + '  "matched": [\\n'
-    + '    {"name": "exact club name from list", "reason": "1-2 sentence explanation"}\\n'
-    + '  ],\\n'
-    + '  "suggested": [\\n'
-    + '    {"name": "exact club name from list", "reason": "1-2 sentence explanation"}\\n'
-    + '  ]\\n'
-    + '}';
+  var clubLines = CLUBS.map(function(c) {
+    return 'Name:' + c.name + ' | Category:' + c.category + ' | Tags:' + c.tags.join(', ');
+  }).join('\n');
+
+  var prompt =
+    'You are a friendly club advisor at Western Washington University (WWU).\n' +
+    'A student listed these interests: ' + interests + '\n\n' +
+    'Available WWU clubs:\n' + clubLines + '\n\n' +
+    'Task:\n' +
+    '1. Pick the best 5 MATCHED clubs that align with the student\'s interests.\n' +
+    '2. Pick 3 DISCOVERY clubs the student did not mention but might enjoy based on personality fit.\n\n' +
+    'Respond ONLY with raw JSON (no markdown fences, no extra text):\n' +
+    '{"matched":[{"name":"exact name","reason":"1-2 sentences"}],' +
+    '"discovery":[{"name":"exact name","reason":"1-2 sentences"}]}';
 
   fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1000,
+      max_tokens: 900,
       messages: [{ role: 'user', content: prompt }]
     })
   })
-  .then(function(response) {
-    return response.json().then(function(data) {
-      if (!response.ok) {
-        throw new Error(data && data.error && data.error.message ? data.error.message : 'API error ' + response.status);
-      }
-      return data;
+  .then(function(r) {
+    return r.json().then(function(d) {
+      if (!r.ok) throw new Error(d && d.error ? d.error.message : 'API error ' + r.status);
+      return d;
     });
   })
-  .then(function(data) {
-    var raw = (data.content || []).map(function(b) { return b.text || ''; }).join('').trim();
-    var clean = raw.replace(/^```json\\s*/i, '').replace(/```\\s*$/, '').trim();
+  .then(function(d) {
+    var raw = (d.content || []).map(function(b){ return b.text || ''; }).join('').trim();
+    var clean = raw.replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim();
     var parsed;
     try { parsed = JSON.parse(clean); }
-    catch(e) { throw new Error('Could not parse recommendation response. Please try again.'); }
-    renderResults(parsed, interestsList);
+    catch(e) { throw new Error('Could not read the response. Please try again.'); }
+    showResults(parsed, interests);
   })
-  .catch(function(err) {
-    errorContainer.innerHTML = '<div class="error-box">&#9888; ' + escHtml(err.message) + '</div>';
+  .catch(function(e) {
+    errDiv.innerHTML = '<div class="err-box">\u26A0\uFE0F ' + esc(e.message) + '</div>';
   })
   .finally(function() {
     btn.disabled = false;
-    loading.classList.remove('active');
+    loader.classList.remove('show');
   });
 }
 
-function renderResults(data, interestsList) {
-  var resultsDiv = document.getElementById('results');
-  var summary = document.getElementById('results-summary');
-  var matchedSec = document.getElementById('matched-section');
-  var suggestedSec = document.getElementById('suggested-section');
+function showResults(data, interests) {
+  var resDiv  = document.getElementById('results');
+  var sub     = document.getElementById('results-sub');
+  var matchGr = document.getElementById('matched-group');
+  var discoGr = document.getElementById('disco-group');
 
-  var matchCount = (data.matched || []).length;
-  var suggestCount = (data.suggested || []).length;
-  summary.textContent = 'Based on your interests in ' + interestsList
-    + ' — here are ' + matchCount + ' direct matches and '
-    + suggestCount + ' clubs you might not have considered.';
+  var mc = (data.matched   || []).length;
+  var dc = (data.discovery || []).length;
+  sub.textContent = 'Based on your interest in ' + interests + ' — ' +
+    mc + ' direct match' + (mc !== 1 ? 'es' : '') + ' and ' +
+    dc + ' discovery pick' + (dc !== 1 ? 's' : '') + ' just for you.';
 
-  matchedSec.innerHTML = '';
-  suggestedSec.innerHTML = '';
+  matchGr.innerHTML = '';
+  discoGr.innerHTML = '';
 
-  if (matchCount) {
-    matchedSec.innerHTML = '<div class="results-group-label">Direct Matches</div><div class="cards-grid" id="matched-cards"></div>';
-    var mg = document.getElementById('matched-cards');
-    (data.matched || []).forEach(function(item, i) { mg.appendChild(buildCard(item, 'matched', i)); });
+  if (mc) {
+    var mLabel = document.createElement('div');
+    mLabel.className = 'group-label';
+    mLabel.textContent = 'Direct Matches';
+    matchGr.appendChild(mLabel);
+    var mGrid = document.createElement('div');
+    mGrid.className = 'cards';
+    (data.matched || []).forEach(function(item, i) { mGrid.appendChild(makeCard(item, 'match', i)); });
+    matchGr.appendChild(mGrid);
   }
 
-  if (suggestCount) {
-    suggestedSec.innerHTML = '<div class="results-group-label">You Might Also Like</div><div class="cards-grid" id="suggested-cards"></div>';
-    var sg = document.getElementById('suggested-cards');
-    (data.suggested || []).forEach(function(item, i) { sg.appendChild(buildCard(item, 'suggested', i)); });
+  if (dc) {
+    var dLabel = document.createElement('div');
+    dLabel.className = 'group-label';
+    dLabel.textContent = 'You Might Also Like';
+    discoGr.appendChild(dLabel);
+    var dGrid = document.createElement('div');
+    dGrid.className = 'cards';
+    (data.discovery || []).forEach(function(item, i) { dGrid.appendChild(makeCard(item, 'disco', i)); });
+    discoGr.appendChild(dGrid);
   }
 
-  resultsDiv.style.display = 'block';
-  resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  resDiv.style.display = 'block';
+  resDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function buildCard(item, type, index) {
+function makeCard(item, type, idx) {
   var club = null;
-  for (var i = 0; i < ALL_CLUBS.length; i++) {
-    if (ALL_CLUBS[i].name === item.name) { club = ALL_CLUBS[i]; break; }
+  for (var i = 0; i < CLUBS.length; i++) {
+    if (CLUBS[i].name === item.name) { club = CLUBS[i]; break; }
   }
-  if (!club) club = {};
-  var card = document.createElement('div');
-  card.className = 'club-card ' + type;
-  card.style.animationDelay = (index * 0.06) + 's';
+  if (!club) club = { category:'', description:'', tags:[] };
 
-  var badgeClass = type === 'matched' ? 'badge-match' : 'badge-suggest';
-  var badgeLabel = type === 'matched' ? '&#10003; Match' : '&#10022; Discovery';
-  var tags = (club.tags || []).slice(0, 4).map(function(t) {
-    return '<span class="card-tag">' + escHtml(t) + '</span>';
+  var card = document.createElement('div');
+  card.className = 'card ' + type;
+  card.style.animationDelay = (idx * 0.07) + 's';
+
+  var tagHtml = (club.tags || []).slice(0,4).map(function(t){
+    return '<span class="card-tag">' + esc(t) + '</span>';
   }).join('');
 
+  var badgeHtml = type === 'match'
+    ? '<span class="badge badge-match">&#10003; Match</span>'
+    : '<span class="badge badge-disco">&#9670; Discovery</span>';
+
   card.innerHTML =
-    '<div class="card-category">' + escHtml(club.category || '') + '</div>'
-    + '<div class="card-name">' + escHtml(item.name || '') + '</div>'
-    + '<div class="card-description">' + escHtml(club.description || '') + '</div>'
-    + '<div class="card-reason">' + escHtml(item.reason || '') + '</div>'
-    + '<span class="card-match-badge ' + badgeClass + '">' + badgeLabel + '</span>'
-    + '<div class="card-tags">' + tags + '</div>';
+    '<div class="card-cat">'    + esc(club.category || '')    + '</div>' +
+    '<div class="card-name">'   + esc(item.name || '')        + '</div>' +
+    '<div class="card-desc">'   + esc(club.description || '') + '</div>' +
+    '<div class="card-reason">' + esc(item.reason || '')      + '</div>' +
+    badgeHtml +
+    '<div class="card-tags">'   + tagHtml                     + '</div>';
   return card;
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
 }
 </script>
 </body>
 </html>"""
-    )
+
     return html.encode('utf-8')
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# HTTP REQUEST HANDLER
-# ──────────────────────────────────────────────────────────────────────────────
+# ------------------------------------------------------------------------------
+# SERVER
+# ------------------------------------------------------------------------------
 class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
-        pass  # silence default access log; remove to re-enable
+        pass  # remove this line to see access logs
 
     def do_GET(self):
         if self.path in ('/', '/index.html'):
@@ -814,9 +859,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_error(404, 'Not Found')
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# ENTRY POINT
-# ──────────────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     with socketserver.TCPServer(('', PORT), Handler) as httpd:
         httpd.allow_reuse_address = True
@@ -824,11 +866,11 @@ if __name__ == '__main__':
         print("  +--------------------------------------------------+")
         print("  |   WWU Club Finder - Western Washington Univ.    |")
         print("  +--------------------------------------------------+")
-        print("  |  Server running ->  http://localhost:8080        |")
-        print("  |  Press Ctrl+C to stop                           |")
+        print("  |  Open ->  http://localhost:8080                  |")
+        print("  |  Stop ->  Ctrl+C                                 |")
         print("  +--------------------------------------------------+")
         print()
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\n  Server stopped. Go Vikings!")
+            print("\n  Stopped. Go Vikings!")
