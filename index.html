@@ -1,67 +1,54 @@
 """
 WWU Club Finder & Recommender
 =============================
-A Flask web app that helps Western Washington University students
-find and discover clubs based on their interests.
+Uses ONLY Python's standard library — no pip installs required.
+Requires Python 3.7+
 
 HOW TO RUN:
 -----------
-1. Install dependencies:
-   pip install flask anthropic
+1. Set your Anthropic API key (free at https://console.anthropic.com):
 
-2. Set your Anthropic API key (get one free at https://console.anthropic.com):
-   - On Mac/Linux:  export ANTHROPIC_API_KEY="your-key-here"
-   - On Windows:    set ANTHROPIC_API_KEY=your-key-here
-   - In Colab: Use the Secrets panel (key icon) or:
-       import os; os.environ["ANTHROPIC_API_KEY"] = "your-key-here"
+   Mac/Linux terminal:
+       export ANTHROPIC_API_KEY="sk-ant-..."
 
-3. Run the app:
-   python wwu_club_finder.py
-   Then open http://127.0.0.1:5000 in your browser.
+   Windows command prompt:
+       set ANTHROPIC_API_KEY=sk-ant-...
+
+   Google Colab (run in a cell before the script):
+       import os
+       os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
+
+2. Run the script:
+       python wwu_club_finder.py
+
+3. Open your browser to:
+       http://127.0.0.1:5000
 
 GOOGLE COLAB INSTRUCTIONS:
 ---------------------------
-Run each cell below in order. Uses flask-cloudflared for a free
-public URL — no account or token required.
-
-   # Cell 1 - Install deps
-   !pip install flask anthropic flask-cloudflared -q
-
-   # Cell 2 - Set API key (replace with your real key)
+   # Cell 1 - Set your API key
    import os
    os.environ["ANTHROPIC_API_KEY"] = "sk-ant-..."
 
-   # Cell 3 - Paste this entire file then run:
-   # (The __main__ block at the bottom auto-detects Colab and
-   #  prints a public URL you can open from any browser.)
+   # Cell 2 - Paste this entire file and run it.
+   # Then click the link that appears in the output.
 
-GITHUB / LOCAL:
----------------
-Just run:  python wwu_club_finder.py
+That's it - no pip installs needed.
 """
 
-# ─────────────────────────────────────────────
-# IMPORTS
-# ─────────────────────────────────────────────
+# ── Standard-library only ─────────────────────────────────────────
 import os
 import json
 import threading
-from flask import Flask, render_template_string, request, jsonify
-
-try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
-except ImportError:
-    ANTHROPIC_AVAILABLE = False
-    print("WARNING: 'anthropic' package not found. Run: pip install anthropic")
+import urllib.request
+import urllib.error
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # ─────────────────────────────────────────────
 # WWU CLUBS DATABASE
-# Categories: Technology, Arts, Culture, Sports, Environment,
-#             Academic, Social Justice, Health, Business, Outdoor
 # ─────────────────────────────────────────────
 WWU_CLUBS = [
-    # ── Technology & Engineering ──────────────────────────────────
+    # Technology & Engineering
     {"name": "WWU ACM (Association for Computing Machinery)",
      "category": "Technology",
      "tags": ["computer science", "programming", "coding", "tech", "software", "STEM"],
@@ -70,7 +57,7 @@ WWU_CLUBS = [
     {"name": "IEEE Student Branch",
      "category": "Technology",
      "tags": ["electrical engineering", "computer engineering", "hardware", "STEM", "tech"],
-     "description": "Professional society for Electrical & Computer Engineering students.",
+     "description": "Professional society for Electrical and Computer Engineering students.",
      "contact": "ieee@wwu.edu"},
     {"name": "WWU Racing",
      "category": "Technology",
@@ -88,11 +75,11 @@ WWU_CLUBS = [
      "description": "Build and program robots for competitions and fun projects.",
      "contact": "win.wwu.edu"},
 
-    # ── Arts & Creative ───────────────────────────────────────────
+    # Arts & Creative
     {"name": "KUGS 89.3FM Radio",
      "category": "Arts",
      "tags": ["radio", "music", "broadcasting", "media", "podcasting", "journalism"],
-     "description": "Broadcasting since 1974 — the voice of Western students. Hands-on radio and podcasting experience.",
+     "description": "Broadcasting since 1974 the voice of Western students. Hands-on radio and podcasting experience.",
      "contact": "kugs.org"},
     {"name": "Wavelength Student Media",
      "category": "Arts",
@@ -130,7 +117,7 @@ WWU_CLUBS = [
      "description": "Students passionate about animation, concept art, and digital storytelling.",
      "contact": "win.wwu.edu"},
 
-    # ── Cultural & Identity ────────────────────────────────────────
+    # Cultural & Identity
     {"name": "African Caribbean Club",
      "category": "Culture",
      "tags": ["African", "Caribbean", "culture", "diversity", "heritage", "community"],
@@ -197,7 +184,7 @@ WWU_CLUBS = [
      "description": "Celebrates Chicano/Latino culture through traditional and modern dance performance.",
      "contact": "mss.wwu.edu/esc/esc-clubs"},
 
-    # ── Sports & Recreation ────────────────────────────────────────
+    # Sports & Recreation
     {"name": "WWU Ultimate Frisbee (Viking Vanguard)",
      "category": "Sports",
      "tags": ["ultimate frisbee", "sport", "team", "outdoor", "competitive", "athletic"],
@@ -244,7 +231,7 @@ WWU_CLUBS = [
      "description": "Competitive club swimming for those who love the water.",
      "contact": "sportclubs.wwu.edu"},
 
-    # ── Environment & Sustainability ───────────────────────────────
+    # Environment & Sustainability
     {"name": "WWU Surfrider Foundation",
      "category": "Environment",
      "tags": ["ocean", "environment", "surfing", "sustainability", "conservation", "activism"],
@@ -271,7 +258,7 @@ WWU_CLUBS = [
      "description": "Discussions, events, and advocacy related to environmental science and ecology.",
      "contact": "cenv.wwu.edu/clubs-organizations"},
 
-    # ── Academic & Professional ────────────────────────────────────
+    # Academic & Professional
     {"name": "Model United Nations (MUN)",
      "category": "Academic",
      "tags": ["international relations", "debate", "diplomacy", "politics", "public speaking", "global"],
@@ -318,7 +305,7 @@ WWU_CLUBS = [
      "description": "Promotes STEM diversity and supports underrepresented students in science.",
      "contact": "mss.wwu.edu/esc/esc-clubs"},
 
-    # ── Social Justice & Advocacy ──────────────────────────────────
+    # Social Justice & Advocacy
     {"name": "Political Science Association (PSA)",
      "category": "Social Justice",
      "tags": ["politics", "government", "debate", "policy", "bipartisan", "civic engagement"],
@@ -355,7 +342,7 @@ WWU_CLUBS = [
      "description": "Promotes conservative values and civic engagement among Western students.",
      "contact": "win.wwu.edu"},
 
-    # ── Health & Wellness ──────────────────────────────────────────
+    # Health & Wellness
     {"name": "WWU Mental Health Awareness Club",
      "category": "Health",
      "tags": ["mental health", "wellness", "self-care", "psychology", "stigma", "support"],
@@ -366,7 +353,7 @@ WWU_CLUBS = [
      "tags": ["yoga", "wellness", "meditation", "fitness", "mindfulness", "health"],
      "description": "Student-led yoga sessions promoting physical and mental wellness.",
      "contact": "win.wwu.edu"},
-    {"name": "WWU Nutrition & Dietetics Club",
+    {"name": "WWU Nutrition and Dietetics Club",
      "category": "Health",
      "tags": ["nutrition", "food", "health", "dietetics", "science", "wellness"],
      "description": "Explores nutrition science and healthy eating through events and professional networking.",
@@ -377,7 +364,7 @@ WWU_CLUBS = [
      "description": "Social dancing events, workshops, and performances in styles from swing to salsa.",
      "contact": "win.wwu.edu"},
 
-    # ── Business & Entrepreneurship ────────────────────────────────
+    # Business & Entrepreneurship
     {"name": "Association of Latino Professionals for America (ALPFA)",
      "category": "Business",
      "tags": ["Latino", "business", "professional", "leadership", "networking", "finance"],
@@ -399,7 +386,7 @@ WWU_CLUBS = [
      "description": "Develops marketing skills through real campaigns, case competitions, and industry networking.",
      "contact": "win.wwu.edu"},
 
-    # ── Outdoor & Adventure ────────────────────────────────────────
+    # Outdoor & Adventure
     {"name": "AS Outdoor Center",
      "category": "Outdoor",
      "tags": ["outdoor", "hiking", "kayaking", "camping", "adventure", "nature", "recreation"],
@@ -408,14 +395,14 @@ WWU_CLUBS = [
     {"name": "WWU Hiking Club",
      "category": "Outdoor",
      "tags": ["hiking", "trails", "nature", "outdoor", "backpacking", "Pacific Northwest"],
-     "description": "Organized hikes throughout the stunning Pacific Northwest — beginner to advanced.",
+     "description": "Organized hikes throughout the stunning Pacific Northwest, beginner to advanced.",
      "contact": "win.wwu.edu"},
-    {"name": "WWU Ski & Snowboard Club",
+    {"name": "WWU Ski and Snowboard Club",
      "category": "Outdoor",
      "tags": ["skiing", "snowboarding", "winter sports", "outdoor", "mountain", "recreation"],
      "description": "Group ski and snowboard trips to local mountains like Mt. Baker and Stevens Pass.",
      "contact": "win.wwu.edu"},
-    {"name": "WWU Kayak & Paddling Club",
+    {"name": "WWU Kayak and Paddling Club",
      "category": "Outdoor",
      "tags": ["kayaking", "paddling", "water", "outdoor", "adventure", "lake", "ocean"],
      "description": "Paddle Bellingham Bay, Lake Whatcom, and beyond with guided club outings.",
@@ -427,89 +414,114 @@ WWU_CLUBS = [
      "contact": "win.wwu.edu"},
 ]
 
-# ─────────────────────────────────────────────
-# ANTHROPIC CLAUDE RECOMMENDATION ENGINE
-# ─────────────────────────────────────────────
-
-def get_ai_recommendations(user_interests: str, clubs_json: str) -> dict:
-    """Call Claude API to match and recommend clubs based on user interests."""
-    if not ANTHROPIC_AVAILABLE:
-        return {"error": "Anthropic package not installed. Run: pip install anthropic"}
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return {"error": "ANTHROPIC_API_KEY environment variable not set. See instructions at the top of this file."}
-
-    client = anthropic.Anthropic(api_key=api_key)
-
-    system_prompt = """You are a friendly and enthusiastic student advisor at Western Washington University (WWU) in Bellingham, Washington.
-Your job is to help students find clubs that match their interests and discover new ones they might love.
-
-You will receive:
-1. A list of all WWU clubs in JSON format
-2. The student's stated interests
-
-You MUST respond with ONLY valid JSON — no markdown, no preamble, no explanation outside the JSON.
-
-Return this exact structure:
-{
-  "matched_clubs": [
-    {
-      "name": "Club Name (exactly as given)",
-      "match_reason": "1-2 sentences explaining why this club fits the student's interests",
-      "match_score": 95
-    }
-  ],
-  "stretch_clubs": [
-    {
-      "name": "Club Name (exactly as given)",
-      "why_you_might_love_it": "1-2 sentences explaining why this outside-interests club might still appeal to this student",
-      "connection": "Brief bridge from their interests to this club"
-    }
-  ],
-  "personalized_message": "A warm, encouraging 2-3 sentence message to the student about getting involved at WWU."
+# Pre-build a name->info lookup used by the frontend JavaScript
+CLUBS_MAP = {
+    club["name"]: {"category": club["category"], "contact": club.get("contact", "")}
+    for club in WWU_CLUBS
 }
 
-Rules:
-- matched_clubs: 3–6 clubs that directly match stated interests, sorted by match_score (highest first)
-- stretch_clubs: 2–4 clubs outside stated interests but likely to appeal given the student's profile
-- match_score: integer 0–100 indicating how well the club fits
-- Only use club names that appear EXACTLY in the provided clubs list
-- Be genuine, warm, and enthusiastic — like a helpful upperclassman"""
 
-    user_message = f"""Student interests: {user_interests}
+# ─────────────────────────────────────────────
+# AI RECOMMENDATION ENGINE  (pure urllib)
+# ─────────────────────────────────────────────
 
-Available WWU clubs:
-{clubs_json}
+SYSTEM_PROMPT = (
+    "You are a friendly and enthusiastic student advisor at Western Washington University "
+    "(WWU) in Bellingham, Washington. Your job is to help students find clubs that match "
+    "their interests and discover new ones they might love.\n\n"
+    "You will receive:\n"
+    "1. A list of all WWU clubs in JSON format\n"
+    "2. The student's stated interests\n\n"
+    "You MUST respond with ONLY valid JSON - no markdown, no preamble, no explanation outside the JSON.\n\n"
+    "Return this exact structure:\n"
+    "{\n"
+    '  "matched_clubs": [\n'
+    '    {\n'
+    '      "name": "Club Name (exactly as given)",\n'
+    '      "match_reason": "1-2 sentences explaining why this club fits the student\'s interests",\n'
+    '      "match_score": 95\n'
+    "    }\n"
+    "  ],\n"
+    '  "stretch_clubs": [\n'
+    '    {\n'
+    '      "name": "Club Name (exactly as given)",\n'
+    '      "why_you_might_love_it": "1-2 sentences explaining why this outside-interests club might still appeal",\n'
+    '      "connection": "Brief bridge from their interests to this club"\n'
+    "    }\n"
+    "  ],\n"
+    '  "personalized_message": "A warm, encouraging 2-3 sentence message to the student about getting involved at WWU."\n'
+    "}\n\n"
+    "Rules:\n"
+    "- matched_clubs: 3-6 clubs that directly match stated interests, sorted by match_score (highest first)\n"
+    "- stretch_clubs: 2-4 clubs outside stated interests but likely to appeal given the student's profile\n"
+    "- match_score: integer 0-100 indicating how well the club fits\n"
+    "- Only use club names that appear EXACTLY in the provided clubs list\n"
+    "- Be genuine, warm, and enthusiastic"
+)
 
-Please recommend clubs for this student."""
+
+def get_ai_recommendations(user_interests):
+    """Call the Anthropic API using only urllib - no third-party packages needed."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        return {
+            "error": (
+                "ANTHROPIC_API_KEY is not set.\n"
+                "Get a free key at: https://console.anthropic.com\n"
+                "Then set it with:  export ANTHROPIC_API_KEY='sk-ant-...'"
+            )
+        }
+
+    clubs_json = json.dumps(WWU_CLUBS, indent=2)
+    user_message = (
+        "Student interests: " + user_interests + "\n\n"
+        "Available WWU clubs:\n" + clubs_json + "\n\n"
+        "Please recommend clubs for this student."
+    )
+
+    payload = json.dumps({
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 1500,
+        "system": SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": user_message}],
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
 
     try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1500,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}]
-        )
-        raw = message.content[0].text.strip()
-        # Strip any accidental markdown code fences
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        raw = body["content"][0]["text"].strip()
+        # Strip accidental markdown fences just in case
         raw = raw.replace("```json", "").replace("```", "").strip()
         return json.loads(raw)
-    except json.JSONDecodeError as e:
-        return {"error": f"Could not parse AI response as JSON: {e}"}
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        return {"error": "Anthropic API error " + str(e.code) + ": " + err_body}
+    except urllib.error.URLError as e:
+        return {"error": "Network error: " + str(e.reason)}
+    except (KeyError, json.JSONDecodeError) as e:
+        return {"error": "Could not parse API response: " + str(e)}
     except Exception as e:
-        return {"error": f"API error: {str(e)}"}
+        return {"error": "Unexpected error: " + str(e)}
 
 
 # ─────────────────────────────────────────────
-# FLASK APP
+# HTML PAGE
 # ─────────────────────────────────────────────
 
-app = Flask(__name__)
-
-# ── HTML TEMPLATE ──────────────────────────────────────────────────
-HTML_TEMPLATE = """
-<!DOCTYPE html>
+def build_html():
+    clubs_map_json = json.dumps(CLUBS_MAP)
+    return """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -519,27 +531,20 @@ HTML_TEMPLATE = """
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
   <style>
-    /* ── CSS Variables (WWU Colors) ───────────────────────────── */
     :root {
-      --royal-blue:   #003F87;
-      --gold:         #C4982A;
-      --gold-light:   #E8C060;
-      --blue-dark:    #002654;
-      --blue-mid:     #0055A5;
-      --cream:        #FDFAF3;
-      --white:        #FFFFFF;
-      --gray-light:   #F0F4F8;
-      --gray-mid:     #CBD5E1;
-      --gray-text:    #475569;
-      --text-dark:    #1E293B;
-      --success:      #166534;
-      --success-bg:   #DCFCE7;
-      --stretch-bg:   #FFF7ED;
-      --stretch-border:#C2410C;
+      --blue-dark:  #002654;
+      --blue:       #003F87;
+      --blue-mid:   #0055A5;
+      --gold:       #C4982A;
+      --gold-light: #E8C060;
+      --cream:      #FDFAF3;
+      --white:      #FFFFFF;
+      --gray-light: #F0F4F8;
+      --gray-mid:   #CBD5E1;
+      --gray-text:  #475569;
+      --text-dark:  #1E293B;
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: 'Source Sans 3', sans-serif;
       background: var(--cream);
@@ -548,10 +553,8 @@ HTML_TEMPLATE = """
       display: flex;
       flex-direction: column;
     }
-
-    /* ── HEADER ──────────────────────────────────────────────── */
     header {
-      background: linear-gradient(135deg, var(--blue-dark) 0%, var(--royal-blue) 60%, var(--blue-mid) 100%);
+      background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue) 60%, var(--blue-mid) 100%);
       color: var(--white);
       position: relative;
       overflow: hidden;
@@ -563,15 +566,6 @@ HTML_TEMPLATE = """
       width: 300px; height: 300px;
       border-radius: 50%;
       background: rgba(196,152,42,0.15);
-      pointer-events: none;
-    }
-    header::after {
-      content: '';
-      position: absolute;
-      bottom: -80px; left: -40px;
-      width: 250px; height: 250px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.05);
       pointer-events: none;
     }
     .header-inner {
@@ -600,7 +594,6 @@ HTML_TEMPLATE = """
       font-weight: 900;
       line-height: 1.1;
       margin-bottom: 12px;
-      letter-spacing: -0.5px;
     }
     header h1 span { color: var(--gold-light); }
     header p {
@@ -611,8 +604,6 @@ HTML_TEMPLATE = """
       margin: 0 auto;
       line-height: 1.6;
     }
-
-    /* ── MAIN CONTENT ─────────────────────────────────────────── */
     main {
       flex: 1;
       max-width: 900px;
@@ -620,8 +611,6 @@ HTML_TEMPLATE = """
       padding: 48px 24px 80px;
       width: 100%;
     }
-
-    /* ── SEARCH CARD ─────────────────────────────────────────── */
     .search-card {
       background: var(--white);
       border-radius: 16px;
@@ -633,7 +622,7 @@ HTML_TEMPLATE = """
     .search-card h2 {
       font-family: 'Playfair Display', serif;
       font-size: 1.6rem;
-      color: var(--royal-blue);
+      color: var(--blue);
       margin-bottom: 8px;
     }
     .search-card .subtitle {
@@ -641,15 +630,10 @@ HTML_TEMPLATE = """
       margin-bottom: 24px;
       font-size: 0.95rem;
     }
-
-    /* Tags / interest chips */
-    .interest-tags {
-      margin-bottom: 20px;
-    }
-    .interest-tags p {
+    .chip-label {
       font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--royal-blue);
+      font-weight: 700;
+      color: var(--blue);
       text-transform: uppercase;
       letter-spacing: 1px;
       margin-bottom: 10px;
@@ -658,6 +642,7 @@ HTML_TEMPLATE = """
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+      margin-bottom: 20px;
     }
     .tag-chip {
       border: 2px solid var(--gray-mid);
@@ -671,14 +656,12 @@ HTML_TEMPLATE = """
       user-select: none;
       font-weight: 600;
     }
-    .tag-chip:hover { border-color: var(--royal-blue); color: var(--royal-blue); }
+    .tag-chip:hover { border-color: var(--blue); color: var(--blue); }
     .tag-chip.selected {
-      background: var(--royal-blue);
-      border-color: var(--royal-blue);
+      background: var(--blue);
+      border-color: var(--blue);
       color: var(--white);
     }
-
-    /* Text area */
     textarea {
       width: 100%;
       border: 2px solid var(--gray-mid);
@@ -694,15 +677,13 @@ HTML_TEMPLATE = """
       background: var(--gray-light);
       margin-bottom: 20px;
     }
-    textarea:focus { border-color: var(--royal-blue); background: var(--white); }
+    textarea:focus { border-color: var(--blue); background: var(--white); }
     textarea::placeholder { color: var(--gray-mid); }
-
-    /* Submit button */
     .btn-find {
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      background: linear-gradient(135deg, var(--royal-blue), var(--blue-mid));
+      background: linear-gradient(135deg, var(--blue), var(--blue-mid));
       color: var(--white);
       border: none;
       border-radius: 10px;
@@ -712,16 +693,22 @@ HTML_TEMPLATE = """
       font-weight: 700;
       cursor: pointer;
       transition: all 0.2s ease;
-      letter-spacing: 0.3px;
     }
     .btn-find:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,63,135,0.35); }
     .btn-find:active { transform: translateY(0); }
     .btn-find:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-    .btn-icon { font-size: 1.2rem; }
-
-    /* ── RESULTS SECTION ─────────────────────────────────────── */
+    #loading { display: none; text-align: center; padding: 48px 24px; }
+    .spinner {
+      width: 50px; height: 50px;
+      border: 5px solid var(--gray-mid);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: var(--gray-text); }
     #results { display: none; }
-
     .section-header {
       display: flex;
       align-items: center;
@@ -731,10 +718,10 @@ HTML_TEMPLATE = """
     .section-label {
       font-family: 'Playfair Display', serif;
       font-size: 1.5rem;
-      color: var(--royal-blue);
+      color: var(--blue);
     }
     .section-count {
-      background: var(--royal-blue);
+      background: var(--blue);
       color: var(--white);
       font-size: 0.8rem;
       font-weight: 700;
@@ -746,47 +733,26 @@ HTML_TEMPLATE = """
       border-top: 2px solid var(--gray-mid);
       margin: 36px 0;
     }
-
-    /* Personalized message banner */
     .message-banner {
-      background: linear-gradient(135deg, var(--royal-blue), var(--blue-mid));
+      background: linear-gradient(135deg, var(--blue), var(--blue-mid));
       color: var(--white);
       border-radius: 14px;
       padding: 24px 28px;
       margin-bottom: 32px;
       font-size: 1.05rem;
       line-height: 1.6;
-      position: relative;
-      overflow: hidden;
     }
-    .message-banner::before {
-      content: '🎉';
-      position: absolute;
-      right: 20px; top: 50%;
-      transform: translateY(-50%);
-      font-size: 2.5rem;
-      opacity: 0.25;
-    }
-
-    /* Club cards */
-    .clubs-grid {
-      display: grid;
-      gap: 16px;
-    }
+    .clubs-grid { display: grid; gap: 16px; }
     .club-card {
       background: var(--white);
       border-radius: 14px;
       padding: 24px 28px;
       box-shadow: 0 2px 12px rgba(0,63,135,0.08);
-      border-left: 5px solid var(--royal-blue);
+      border-left: 5px solid var(--blue);
       transition: transform 0.18s ease, box-shadow 0.18s ease;
-      position: relative;
     }
     .club-card:hover { transform: translateX(4px); box-shadow: 0 4px 20px rgba(0,63,135,0.14); }
-    .club-card.stretch {
-      border-left-color: var(--gold);
-      background: var(--stretch-bg);
-    }
+    .club-card.stretch { border-left-color: var(--gold); background: #FFF7ED; }
     .club-card-header {
       display: flex;
       align-items: flex-start;
@@ -797,14 +763,14 @@ HTML_TEMPLATE = """
     .club-name {
       font-family: 'Playfair Display', serif;
       font-size: 1.15rem;
-      color: var(--royal-blue);
+      color: var(--blue);
       line-height: 1.3;
     }
     .club-card.stretch .club-name { color: var(--blue-dark); }
     .match-badge {
       flex-shrink: 0;
-      background: var(--success-bg);
-      color: var(--success);
+      background: #DCFCE7;
+      color: #166534;
       font-size: 0.75rem;
       font-weight: 700;
       padding: 3px 10px;
@@ -829,46 +795,10 @@ HTML_TEMPLATE = """
       color: var(--gold);
       margin-bottom: 8px;
     }
-    .club-reason {
-      font-size: 0.96rem;
-      color: var(--gray-text);
-      line-height: 1.55;
-    }
-    .club-connection {
-      margin-top: 8px;
-      font-size: 0.85rem;
-      font-style: italic;
-      color: #7C2D12;
-    }
-    .club-contact {
-      margin-top: 12px;
-      font-size: 0.82rem;
-      color: var(--blue-mid);
-      font-weight: 600;
-    }
-    .club-contact a {
-      color: var(--blue-mid);
-      text-decoration: underline;
-    }
-
-    /* ── LOADING ─────────────────────────────────────────────── */
-    #loading {
-      display: none;
-      text-align: center;
-      padding: 48px 24px;
-    }
-    .spinner {
-      width: 50px; height: 50px;
-      border: 5px solid var(--gray-mid);
-      border-top-color: var(--royal-blue);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto 16px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #loading p { color: var(--gray-text); font-size: 1rem; }
-
-    /* ── ERROR ───────────────────────────────────────────────── */
+    .club-reason { font-size: 0.96rem; color: var(--gray-text); line-height: 1.55; }
+    .club-connection { margin-top: 8px; font-size: 0.85rem; font-style: italic; color: #7C2D12; }
+    .club-contact { margin-top: 12px; font-size: 0.82rem; color: var(--blue-mid); font-weight: 600; }
+    .club-contact a { color: var(--blue-mid); }
     .error-box {
       background: #FEF2F2;
       border: 2px solid #FCA5A5;
@@ -876,10 +806,28 @@ HTML_TEMPLATE = """
       padding: 20px 24px;
       color: #991B1B;
       font-size: 0.95rem;
-      line-height: 1.5;
+      line-height: 1.6;
+      white-space: pre-wrap;
     }
-
-    /* ── FOOTER ──────────────────────────────────────────────── */
+    .browse-box {
+      text-align: center;
+      margin-top: 48px;
+      padding: 32px;
+      background: var(--white);
+      border-radius: 14px;
+      border: 2px dashed var(--gray-mid);
+    }
+    .browse-box p { font-size: 1rem; color: var(--gray-text); margin-bottom: 12px; }
+    .browse-link {
+      display: inline-block;
+      background: var(--gold);
+      color: var(--blue-dark);
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 12px 28px;
+      border-radius: 10px;
+      text-decoration: none;
+    }
     footer {
       background: var(--blue-dark);
       color: rgba(255,255,255,0.65);
@@ -889,8 +837,6 @@ HTML_TEMPLATE = """
     }
     footer strong { color: var(--gold-light); }
     footer a { color: var(--gold-light); }
-
-    /* ── RESPONSIVE ──────────────────────────────────────────── */
     @media (max-width: 600px) {
       .search-card { padding: 24px 20px; }
       .club-card { padding: 18px 20px; }
@@ -899,7 +845,6 @@ HTML_TEMPLATE = """
 </head>
 <body>
 
-<!-- HEADER -->
 <header>
   <div class="header-inner">
     <div class="header-badge">Western Washington University</div>
@@ -908,57 +853,46 @@ HTML_TEMPLATE = """
   </div>
 </header>
 
-<!-- MAIN -->
 <main>
-
-  <!-- SEARCH CARD -->
   <div class="search-card">
     <h2>What are you into?</h2>
     <p class="subtitle">Select interests below, type your own, or do both. The more detail you share, the better your matches.</p>
 
-    <!-- Quick-pick chips -->
-    <div class="interest-tags">
-      <p>Quick picks</p>
-      <div class="tag-grid" id="chipGrid">
-        <span class="tag-chip" data-tag="technology &amp; coding">💻 Tech &amp; Coding</span>
-        <span class="tag-chip" data-tag="music">🎵 Music</span>
-        <span class="tag-chip" data-tag="outdoor adventures &amp; hiking">🥾 Outdoors</span>
-        <span class="tag-chip" data-tag="sports &amp; fitness">⚽ Sports</span>
-        <span class="tag-chip" data-tag="environment &amp; sustainability">🌿 Environment</span>
-        <span class="tag-chip" data-tag="art &amp; photography">🎨 Art</span>
-        <span class="tag-chip" data-tag="social justice &amp; advocacy">✊ Social Justice</span>
-        <span class="tag-chip" data-tag="business &amp; entrepreneurship">💼 Business</span>
-        <span class="tag-chip" data-tag="international relations &amp; politics">🌍 Politics/Global</span>
-        <span class="tag-chip" data-tag="health &amp; wellness">🧘 Health &amp; Wellness</span>
-        <span class="tag-chip" data-tag="gaming &amp; esports">🎮 Gaming</span>
-        <span class="tag-chip" data-tag="writing &amp; journalism">✍️ Writing</span>
-        <span class="tag-chip" data-tag="dance">💃 Dance</span>
-        <span class="tag-chip" data-tag="science &amp; research">🔬 Science</span>
-        <span class="tag-chip" data-tag="cultural identity">🌺 Culture</span>
-      </div>
+    <p class="chip-label">Quick picks</p>
+    <div class="tag-grid" id="chipGrid">
+      <span class="tag-chip" data-tag="technology and coding">&#x1F4BB; Tech &amp; Coding</span>
+      <span class="tag-chip" data-tag="music">&#x1F3B5; Music</span>
+      <span class="tag-chip" data-tag="outdoor adventures and hiking">&#x1F97E; Outdoors</span>
+      <span class="tag-chip" data-tag="sports and fitness">&#x26BD; Sports</span>
+      <span class="tag-chip" data-tag="environment and sustainability">&#x1F33F; Environment</span>
+      <span class="tag-chip" data-tag="art and photography">&#x1F3A8; Art</span>
+      <span class="tag-chip" data-tag="social justice and advocacy">&#x270A; Social Justice</span>
+      <span class="tag-chip" data-tag="business and entrepreneurship">&#x1F4BC; Business</span>
+      <span class="tag-chip" data-tag="international relations and politics">&#x1F30D; Politics &amp; Global</span>
+      <span class="tag-chip" data-tag="health and wellness">&#x1F9D8; Health &amp; Wellness</span>
+      <span class="tag-chip" data-tag="gaming">&#x1F3AE; Gaming</span>
+      <span class="tag-chip" data-tag="writing and journalism">&#x270D;&#xFE0F; Writing</span>
+      <span class="tag-chip" data-tag="dance">&#x1F483; Dance</span>
+      <span class="tag-chip" data-tag="science and research">&#x1F52C; Science</span>
+      <span class="tag-chip" data-tag="cultural identity and heritage">&#x1F33A; Culture</span>
     </div>
 
     <textarea id="interestsInput"
-              placeholder="Tell us more... e.g. 'I love hiking and photography, and I'm curious about environmental policy. I also play guitar and want to meet people passionate about sustainability.'"></textarea>
+      placeholder="Tell us more... e.g. 'I love hiking and photography, and I am curious about environmental policy. I also play guitar and want to meet people passionate about sustainability.'"></textarea>
 
     <button class="btn-find" id="findBtn" onclick="findClubs()">
-      <span class="btn-icon">🔍</span>
-      Find My Clubs
+      &#x1F50D; Find My Clubs
     </button>
   </div>
 
-  <!-- LOADING -->
   <div id="loading">
     <div class="spinner"></div>
     <p>Searching over 60 WWU clubs for your best matches...</p>
   </div>
 
-  <!-- RESULTS -->
   <div id="results"></div>
-
 </main>
 
-<!-- FOOTER -->
 <footer>
   <p>
     <strong>WWU Club Finder</strong> &mdash; Powered by AI &bull;
@@ -968,193 +902,204 @@ HTML_TEMPLATE = """
 </footer>
 
 <script>
-  // ── Chip toggle logic ──────────────────────────────────────
-  const selectedTags = new Set();
+  var CLUBS_MAP = """ + clubs_map_json + """;
+  var selectedTags = {};
 
-  document.querySelectorAll('.tag-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const tag = chip.dataset.tag;
-      if (selectedTags.has(tag)) {
-        selectedTags.delete(tag);
+  document.querySelectorAll('.tag-chip').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      var tag = chip.getAttribute('data-tag');
+      if (selectedTags[tag]) {
+        delete selectedTags[tag];
         chip.classList.remove('selected');
       } else {
-        selectedTags.add(tag);
+        selectedTags[tag] = true;
         chip.classList.add('selected');
       }
     });
   });
 
-  // ── Build interests string from chips + textarea ───────────
   function buildInterests() {
-    const typed = document.getElementById('interestsInput').value.trim();
-    const chips = Array.from(selectedTags).join(', ');
+    var typed = document.getElementById('interestsInput').value.trim();
+    var chips = Object.keys(selectedTags).join(', ');
     if (chips && typed) return chips + '. ' + typed;
     return chips || typed;
   }
 
-  // ── Main find function ─────────────────────────────────────
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   async function findClubs() {
-    const interests = buildInterests();
+    var interests = buildInterests();
     if (!interests) {
-      alert('Please select at least one interest or type something in the text box!');
+      alert('Please select at least one interest or type something!');
       return;
     }
-
-    const btn = document.getElementById('findBtn');
+    var btn = document.getElementById('findBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="btn-icon">⏳</span> Finding your clubs...';
+    btn.textContent = 'Finding your clubs...';
 
     document.getElementById('results').style.display = 'none';
     document.getElementById('results').innerHTML = '';
     document.getElementById('loading').style.display = 'block';
 
     try {
-      const res = await fetch('/recommend', {
+      var res  = await fetch('/recommend', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({interests})
+        body: JSON.stringify({interests: interests})
       });
-      const data = await res.json();
-      renderResults(data, interests);
-    } catch (err) {
+      var data = await res.json();
+      renderResults(data);
+    } catch(err) {
       document.getElementById('results').innerHTML =
-        `<div class="error-box">⚠️ Something went wrong: ${err.message}</div>`;
+        '<div class="error-box">Network error: ' + escHtml(err.message) + '</div>';
       document.getElementById('results').style.display = 'block';
     } finally {
       document.getElementById('loading').style.display = 'none';
       btn.disabled = false;
-      btn.innerHTML = '<span class="btn-icon">🔍</span> Find My Clubs';
+      btn.textContent = 'Find My Clubs';
     }
   }
 
-  // ── Render results HTML ────────────────────────────────────
-  function renderResults(data, interests) {
-    const container = document.getElementById('results');
-
+  function renderResults(data) {
+    var container = document.getElementById('results');
     if (data.error) {
-      container.innerHTML = `<div class="error-box">⚠️ ${data.error}</div>`;
+      container.innerHTML = '<div class="error-box">Warning: ' + escHtml(data.error) + '</div>';
       container.style.display = 'block';
       container.scrollIntoView({behavior:'smooth', block:'start'});
       return;
     }
 
-    let html = '';
+    var html = '';
 
-    // Personalized message
     if (data.personalized_message) {
-      html += `<div class="message-banner">${data.personalized_message}</div>`;
+      html += '<div class="message-banner">' + escHtml(data.personalized_message) + '</div>';
     }
 
-    // Matched clubs
-    const matched = data.matched_clubs || [];
+    var matched = data.matched_clubs || [];
     if (matched.length) {
-      html += `
-        <div class="section-header">
-          <span class="section-label">Your Top Matches</span>
-          <span class="section-count">${matched.length} clubs</span>
-        </div>
-        <div class="clubs-grid">
-      `;
-      matched.forEach(club => {
-        const clubData = CLUBS_MAP[club.name] || {};
-        html += `
-          <div class="club-card">
-            <div class="club-card-header">
-              <div class="club-name">${club.name}</div>
-              <div class="match-badge">✓ ${club.match_score}% match</div>
-            </div>
-            <div class="club-category">${clubData.category || ''}</div>
-            <div class="club-reason">${club.match_reason}</div>
-            ${clubData.contact ? `<div class="club-contact">🔗 <a href="https://${clubData.contact}" target="_blank">${clubData.contact}</a></div>` : ''}
-          </div>
-        `;
+      html += '<div class="section-header">'
+            + '<span class="section-label">Your Top Matches</span>'
+            + '<span class="section-count">' + matched.length + ' clubs</span>'
+            + '</div><div class="clubs-grid">';
+      matched.forEach(function(club) {
+        var info = CLUBS_MAP[club.name] || {};
+        html += '<div class="club-card">'
+              + '<div class="club-card-header">'
+              + '<div class="club-name">' + escHtml(club.name) + '</div>'
+              + '<div class="match-badge">&#x2713; ' + escHtml(club.match_score) + '% match</div>'
+              + '</div>'
+              + '<div class="club-category">' + escHtml(info.category || '') + '</div>'
+              + '<div class="club-reason">' + escHtml(club.match_reason) + '</div>'
+              + (info.contact ? '<div class="club-contact">Link: <a href="https://' + escHtml(info.contact) + '" target="_blank">' + escHtml(info.contact) + '</a></div>' : '')
+              + '</div>';
       });
       html += '</div>';
     }
 
-    // Stretch clubs
-    const stretch = data.stretch_clubs || [];
+    var stretch = data.stretch_clubs || [];
     if (stretch.length) {
-      html += '<hr class="section-divider">';
-      html += `
-        <div class="section-header">
-          <span class="section-label">You Might Also Love</span>
-          <span class="section-count">${stretch.length} clubs</span>
-        </div>
-        <p style="color:var(--gray-text);font-size:0.92rem;margin-bottom:20px;">
-          These clubs are a little outside your stated interests — but we think you'd fit right in.
-        </p>
-        <div class="clubs-grid">
-      `;
-      stretch.forEach(club => {
-        const clubData = CLUBS_MAP[club.name] || {};
-        html += `
-          <div class="club-card stretch">
-            <div class="club-card-header">
-              <div class="club-name">${club.name}</div>
-              <div class="stretch-badge">🌟 Try Something New</div>
-            </div>
-            <div class="club-category">${clubData.category || ''}</div>
-            <div class="club-reason">${club.why_you_might_love_it}</div>
-            ${club.connection ? `<div class="club-connection">💡 ${club.connection}</div>` : ''}
-            ${clubData.contact ? `<div class="club-contact">🔗 <a href="https://${clubData.contact}" target="_blank">${clubData.contact}</a></div>` : ''}
-          </div>
-        `;
+      html += '<hr class="section-divider">'
+            + '<div class="section-header">'
+            + '<span class="section-label">You Might Also Love</span>'
+            + '<span class="section-count">' + stretch.length + ' clubs</span>'
+            + '</div>'
+            + '<p style="color:var(--gray-text);font-size:0.92rem;margin-bottom:20px;">'
+            + 'These clubs are a little outside your stated interests - but we think you would fit right in.'
+            + '</p><div class="clubs-grid">';
+      stretch.forEach(function(club) {
+        var info = CLUBS_MAP[club.name] || {};
+        html += '<div class="club-card stretch">'
+              + '<div class="club-card-header">'
+              + '<div class="club-name">' + escHtml(club.name) + '</div>'
+              + '<div class="stretch-badge">Try Something New</div>'
+              + '</div>'
+              + '<div class="club-category">' + escHtml(info.category || '') + '</div>'
+              + '<div class="club-reason">' + escHtml(club.why_you_might_love_it) + '</div>'
+              + (club.connection ? '<div class="club-connection">Tip: ' + escHtml(club.connection) + '</div>' : '')
+              + (info.contact ? '<div class="club-contact">Link: <a href="https://' + escHtml(info.contact) + '" target="_blank">' + escHtml(info.contact) + '</a></div>' : '')
+              + '</div>';
       });
       html += '</div>';
     }
 
-    // Browse all link
-    html += `
-      <div style="text-align:center;margin-top:48px;padding:32px;background:var(--white);border-radius:14px;border:2px dashed var(--gray-mid);">
-        <p style="font-size:1rem;color:var(--gray-text);margin-bottom:12px;">
-          Want to explore even more? WWU has over 200 clubs on campus!
-        </p>
-        <a href="https://win.wwu.edu/organizations" target="_blank"
-           style="display:inline-block;background:var(--gold);color:var(--blue-dark);font-weight:700;font-size:1rem;padding:12px 28px;border-radius:10px;text-decoration:none;">
-          Browse All Clubs on WIN →
-        </a>
-      </div>
-    `;
+    html += '<div class="browse-box">'
+          + '<p>Want to explore even more? WWU has over 200 clubs on campus!</p>'
+          + '<a class="browse-link" href="https://win.wwu.edu/organizations" target="_blank">Browse All Clubs on WIN</a>'
+          + '</div>';
 
     container.innerHTML = html;
     container.style.display = 'block';
     container.scrollIntoView({behavior:'smooth', block:'start'});
   }
-
-  // Club lookup map (populated from server)
-  const CLUBS_MAP = {{ clubs_map | tojson }};
 </script>
-
 </body>
-</html>
-"""
-
-# ── Build a lookup map for the template ────────────────────────────
-CLUBS_MAP = {club["name"]: {"category": club["category"], "contact": club.get("contact", "")}
-             for club in WWU_CLUBS}
-
-# ── Routes ─────────────────────────────────────────────────────────
-@app.route("/")
-def index():
-    return render_template_string(HTML_TEMPLATE, clubs_map=CLUBS_MAP)
-
-
-@app.route("/recommend", methods=["POST"])
-def recommend():
-    data = request.get_json()
-    interests = data.get("interests", "").strip()
-    if not interests:
-        return jsonify({"error": "Please describe your interests."}), 400
-
-    clubs_json = json.dumps(WWU_CLUBS, indent=2)
-    result = get_ai_recommendations(interests, clubs_json)
-    return jsonify(result)
+</html>"""
 
 
 # ─────────────────────────────────────────────
-# ENTRY POINT
+# HTTP SERVER  (replaces Flask entirely)
 # ─────────────────────────────────────────────
+
+class Handler(BaseHTTPRequestHandler):
+
+    def log_message(self, fmt, *args):
+        print("  " + self.address_string() + " -> " + str(args[0]))
+
+    def do_GET(self):
+        if self.path not in ("/", "/index.html"):
+            self.send_error(404, "Not found")
+            return
+        page = build_html().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(page)))
+        self.end_headers()
+        self.wfile.write(page)
+
+    def do_POST(self):
+        if self.path != "/recommend":
+            self.send_error(404, "Not found")
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        body   = self.rfile.read(length)
+        try:
+            payload   = json.loads(body)
+            interests = payload.get("interests", "").strip()
+        except Exception:
+            interests = ""
+
+        result = get_ai_recommendations(interests) if interests else {"error": "No interests provided."}
+
+        resp = json.dumps(result).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(resp)))
+        self.end_headers()
+        self.wfile.write(resp)
+
+
+# ─────────────────────────────────────────────
+# STARTUP
+# ─────────────────────────────────────────────
+
+def free_port(port):
+    """Kill any process already bound to port (Linux/Colab only)."""
+    import signal, subprocess
+    try:
+        r = subprocess.run(["lsof", "-t", "-i:" + str(port)],
+                           capture_output=True, text=True)
+        for pid in r.stdout.strip().split():
+            if pid:
+                os.kill(int(pid), signal.SIGKILL)
+                print("  Freed port " + str(port) + " (killed PID " + pid + ")")
+    except Exception:
+        pass
+
+
 def detect_colab():
     try:
         import google.colab  # noqa
@@ -1163,67 +1108,49 @@ def detect_colab():
         return False
 
 
-def free_port(port: int):
-    """Kill any process already listening on `port` (Linux/Colab safe)."""
-    import signal
-    import subprocess
-    try:
-        result = subprocess.run(
-            ["lsof", "-t", f"-i:{port}"],
-            capture_output=True, text=True
-        )
-        pids = result.stdout.strip().split()
-        for pid in pids:
-            if pid:
-                os.kill(int(pid), signal.SIGKILL)
-                print(f"  🔪  Freed port {port} (killed PID {pid})")
-    except Exception:
-        pass  # lsof unavailable on Windows — no-op
+def run(port=5000):
+    free_port(port)
 
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    server.allow_reuse_address = True
 
-PORT = 5000
+    print("\n" + "=" * 56)
+    print("  WWU Club Finder - Western Washington University")
+    print("=" * 56)
 
-if __name__ == "__main__":
-    print("\n" + "="*56)
-    print("  WWU Club Finder — Western Washington University")
-    print("="*56)
-
-    if not ANTHROPIC_AVAILABLE:
-        print("  ⚠  Run:  pip install anthropic flask")
     if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("  ⚠  Set ANTHROPIC_API_KEY before starting!")
-        print("     export ANTHROPIC_API_KEY='sk-ant-...'")
-
-    # Always free the port before binding so re-runs never fail
-    free_port(PORT)
+        print("\n  WARNING: ANTHROPIC_API_KEY is not set!")
+        print("  Get a free key at: https://console.anthropic.com")
+        print("  Then run:  export ANTHROPIC_API_KEY='sk-ant-...'")
 
     if detect_colab():
-        # ── Google Colab: Cloudflare Tunnel (no account needed) ──
-        print("\n  📡  Running in Google Colab — creating public URL...")
+        # Try Colab's built-in port proxy first (no installs needed)
         try:
-            from flask_cloudflared import run_with_cloudflared
-            # run_with_cloudflared starts the tunnel and prints the URL,
-            # then app.run() starts Flask in the background thread.
-            run_with_cloudflared(app)
-            app.run(
-                port=PORT,
-                use_reloader=False,   # reloader breaks in Colab
-                threaded=True,        # handle concurrent requests
-                debug=False,          # debug mode causes SystemExit in IPython
-            )
-        except ImportError:
-            print("  flask-cloudflared not found.")
-            print("  Run this in a Colab cell first:")
-            print("    !pip install flask-cloudflared -q")
-        except OSError as e:
-            print(f"  ⚠  Could not bind to port {PORT}: {e}")
-            print("  Try restarting the Colab runtime (Runtime → Restart session).")
+            from google.colab.output import eval_js
+            public_url = eval_js("google.colab.kernel.proxyPort(" + str(port) + ")")
+            print("\n  Public URL (open this in your browser):")
+            print("  " + str(public_url) + "\n")
+        except Exception:
+            print("\n  Server starting on port " + str(port) + ".")
+            print("  In Colab, click the link above or use the port panel.\n")
+
+        # Run in a daemon thread so the Colab cell does not block forever
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        print("  Server is running. Stop the cell (square button) to shut it down.\n")
+        try:
+            t.join()
+        except KeyboardInterrupt:
+            server.shutdown()
     else:
-        # ── Local / GitHub / VS Code ─────────────────────────
-        print(f"\n  🌐  Open in your browser: http://127.0.0.1:{PORT}\n")
+        print("\n  Open in your browser:  http://127.0.0.1:" + str(port) + "\n")
         try:
-            app.run(debug=True, port=PORT, use_reloader=False)
-        except OSError:
-            PORT2 = PORT + 1
-            print(f"  Port {PORT} busy — trying {PORT2}...")
-            app.run(debug=True, port=PORT2, use_reloader=False)
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\n  Server stopped.")
+        finally:
+            server.server_close()
+
+
+if __name__ == "__main__":
+    run(port=5000)
